@@ -1,7 +1,7 @@
 '''
 Adapted from @nicseo code 11/20/14
 
-Last Modified: 7/5/2020
+Last Modified: 1/5/2026
 
 @author: cindiewu
 '''
@@ -37,7 +37,7 @@ def readShiftData(fileName):
     '''
     '''
     shifts = []
-    with open(fileName, 'rU') as f:
+    with open(fileName, 'r') as f:
         reader = csv.reader(f)
         for row in reader:
             row = [float(i) for i in row[:numShiftEntries+1]]
@@ -51,7 +51,7 @@ def readProcData(fileName, numEntries):
     Returns: a list of lists, each one being one procedure's information stored as floats
     '''
     procedures = []
-    with open(fileName, 'rU') as f:
+    with open(fileName, 'r') as f:
         reader = csv.reader(f)
         for row in reader:
             row = [float(i) for i in row[:numEntries+1]]
