@@ -621,43 +621,64 @@ def comparePriorityRules(baseParams, priorities=None, saveResults=False):
 
 def RunSimulation(myP):
 
+    def RunSimulation(myP, saveOutputs=True, printStats=True, printRecommendations=True):
+
     ###### STEP 0: READ DATA / CREATE MODEL ######
 
     # read/process input data
-    shifts = readProcData(myP.shiftDataFile, myP.numEntries)
+    shifts = readShiftData(myP.shiftDataFile, myP.numShiftEntries)
     procedures = readProcData(myP.procDataFile, myP.numEntries)
     procedures = cleanProcTimes(procedures, myP.iProcTime, myP.turnover, myP.totalTimeRoom)
 
     # create time period model
-    #timePeriod = TimePeriod(resolution,daysInPeriod,numCathRooms,numEPRooms,numMiddleRooms,numRestrictedCath,numRestrictedEP,labStartTime, labEndTime, secondShiftStart, HBCloseTime, roomValueChanges)
-
     timePeriod = TimePeriod(myP)
-    
+
     ###### STEP 1: SCHEDULE SHIFTS ######
-    timePeriod.packShifts(shifts, myP)  
+    timePeriod.packShifts(shifts, myP)
 
     ###### STEP 2: PACK PROCEDURES INTO SHIFTS ######
     timePeriod.packProcedures(procedures, myP)
 
     ###### STEP 3: CALCULATE OUTPUT STATISTICS ######
-    avgUtilDay, avgUtilWeek = printOutputStatistics(timePeriod, procedures, myP)
+    if printStats:
+        avgUtilDay, avgUtilWeek = printOutputStatistics(timePeriod, procedures, myP)
 
     ###### STEP 4: SAVE RESULTS ######
-    saveHoldingBayResults(timePeriod,myP.holdingBayWorkbook, myP)
-#    saveSchedulingResults(timePeriod,readWorkbook,readable=True)
-#    saveSchedulingResults(timePeriod,processWorkbook,readable=False)
+    if saveOutputs:
+        saveHoldingBayResults(timePeriod, myP.holdingBayWorkbook, myP)
+        formatDataFileForVisualization(myP.resolution, myP.holdingBayWorkbook)
 
-    ###### STEP 5: PROCESS DATA FILE FOR VISUALIZATION #####
-    formatDataFileForVisualization(myP.resolution, myP.holdingBayWorkbook)    
+    ###### STEP 5: BUILD SUMMARY ######
+    priorityName = "custom"
+    try:
+        if myP.sortIndex == myP.iHistoricalOrder:
+            priorityName = "historical"
+        elif myP.sortIndex == myP.iProcTime and myP.sortDescend:
+            priorityName = "longest procedures first"
+        elif myP.sortIndex == myP.iProcTime and not myP.sortDescend:
+            priorityName = "shortest procedures first"
+        elif myP.sortIndex == myP.iPostTime and myP.sortDescend:
+            priorityName = "longest recovery time first"
+        elif myP.sortIndex == myP.iPostTime and not myP.sortDescend:
+            priorityName = "shortest recovery time first"
+    except Exception:
+        pass
+
+    summary = buildScenarioSummary(timePeriod, procedures, myP, priorityName=priorityName)
+
+    if printRecommendations:
+        printRecommendationReport(summary)
+
+    return timePeriod, summary
     
 def Start():
-    
+
     print("Starting...")
 
-    #create Params instance
+    # create Params instance
     p = Params()
 
-    #set random seed
+    # set random seed
     random.seed(30)
 
     # call Widgets to set Params using GUI
