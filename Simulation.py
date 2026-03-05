@@ -8,9 +8,10 @@ Last Modified: 1/5/2026
 
 import csv
 import os
-
-
 import math
+import copy
+from types import SimpleNamespace
+
 import pandas
 
 from Schedule import *
