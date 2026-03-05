@@ -34,14 +34,22 @@ os.chdir("/content/test-epcath/")
 ######################################################################################################
 ######################################################################################################    
 
-def readShiftData(fileName):
+def readShiftData(fileName, numEntries):
     '''
+    Reads shift data from csv.
+
+    Input:
+        fileName: path to shift csv
+        numEntries: last column index to read (inclusive style used in old code)
+
+    Returns:
+        list of shift rows as floats
     '''
     shifts = []
     with open(fileName, 'r') as f:
         reader = csv.reader(f)
         for row in reader:
-            row = [float(i) for i in row[:numShiftEntries+1]]
+            row = [float(i) for i in row[:numEntries+1]]
             shifts.append(row)
     return shifts
 
