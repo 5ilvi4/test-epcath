@@ -310,7 +310,315 @@ def printSchedule(day,lab,room):
 ##############################################################################
 ############# RUNNING OF THE SCRIPT: not necessary to modify #################
 ##############################################################################
-    
+
+PRIORITY_OPTIONS = [
+    'historical',
+    'longest procedures first',
+    'shortest procedures first',
+    'longest recovery time first',
+    'shortest recovery time first'
+]
+
+
+def cloneParams(baseParams):
+    '''
+    Make a lightweight copy of Params without copying widget objects.
+    '''
+    p = SimpleNamespace()
+    skip_keys = {
+        'wLbl1', 'wLbl2', 'wLblOptional',
+        'wSortPriority', 'wFiles', 'wMeanHBCleanTime', 'wRes', 'wNumCathRooms',
+        'button', 'output', 'wAllWidgets'
+    }
+
+    for k, v in baseParams.__dict__.items():
+        if k in skip_keys:
+            continue
+        try:
+            setattr(p, k, copy.deepcopy(v))
+        except Exception:
+            setattr(p, k, v)
+    return p
+
+
+def applyPriorityRule(params, priorityName):
+    '''
+    Set sorting parameters without needing the GUI widgets.
+    '''
+    if priorityName == 'longest procedures first':
+        params.sortProcs = True
+        params.sortIndex = params.iProcTime
+        params.sortDescend = True
+    elif priorityName == 'shortest procedures first':
+        params.sortProcs = True
+        params.sortIndex = params.iProcTime
+        params.sortDescend = False
+    elif priorityName == 'longest recovery time first':
+        params.sortProcs = True
+        params.sortIndex = params.iPostTime
+        params.sortDescend = True
+    elif priorityName == 'shortest recovery time first':
+        params.sortProcs = True
+        params.sortIndex = params.iPostTime
+        params.sortDescend = False
+    else:  # historical
+        params.sortProcs = True
+        params.sortIndex = params.iHistoricalOrder
+        params.sortDescend = False
+
+
+def percentile(values, pct):
+    '''
+    Simple percentile helper.
+    pct should be in [0, 100].
+    '''
+    if len(values) == 0:
+        return 0
+    vals = sorted(values)
+    rank = int(math.ceil((pct / 100.0) * len(vals))) - 1
+    rank = max(0, min(rank, len(vals) - 1))
+    return vals[rank]
+
+
+def hoursToHHMM(hoursFloat):
+    '''
+    Convert decimal hours to HH:MM string.
+    Example: 18.5 -> "18:30"
+    '''
+    totalMinutes = int(round(hoursFloat * 60))
+    hh = totalMinutes // 60
+    mm = totalMinutes % 60
+    return str(hh) + ":" + format(mm, '02d')
+
+
+def getHoldingBayOccupancyMatrix(timePeriod, params):
+    '''
+    Returns a list of daily occupancy lists.
+    Each inner list is occupancy across all holding-bay time buckets for one day.
+    '''
+    holdingBays = timePeriod.bins[2]
+    numSlots = int(params.HBCloseTime * (60.0 / params.resolution))
+
+    allDays = []
+    for d in range(timePeriod.numDays):
+        occ = [holdingBays[(d, 1.0 * i)] for i in range(numSlots)]
+        allDays.append(occ)
+    return allDays
+
+
+def analyzeHoldingBayDemand(timePeriod, params, bayPercentile=95, closePercentile=95):
+    '''
+    Analyze holding-bay demand profile from simulated occupancy.
+
+    Returns metrics useful for:
+    - recommended number of bays
+    - recommended close time
+    '''
+    allDays = getHoldingBayOccupancyMatrix(timePeriod, params)
+
+    dailyPeaks = []
+    dailyLastOccupiedHours = []
+
+    for occ in allDays:
+        peak = max(occ) if len(occ) > 0 else 0
+        dailyPeaks.append(peak)
+
+        occupiedIdx = [i for i, x in enumerate(occ) if x > 0]
+        if len(occupiedIdx) == 0:
+            dailyLastOccupiedHours.append(0.0)
+        else:
+            lastIdx = occupiedIdx[-1]
+            lastHour = (lastIdx * params.resolution) / 60.0
+            dailyLastOccupiedHours.append(lastHour)
+
+    overallPeak = max(dailyPeaks) if len(dailyPeaks) > 0 else 0
+    peakP90 = percentile(dailyPeaks, 90)
+    peakP95 = percentile(dailyPeaks, bayPercentile)
+
+    lastOccP90 = percentile(dailyLastOccupiedHours, 90)
+    lastOccP95 = percentile(dailyLastOccupiedHours, closePercentile)
+    overallLast = max(dailyLastOccupiedHours) if len(dailyLastOccupiedHours) > 0 else 0.0
+
+    return {
+        "daily_peak_bays": dailyPeaks,
+        "daily_last_occupied_hours": dailyLastOccupiedHours,
+        "overall_peak_bays": overallPeak,
+        "peak_bays_p90": peakP90,
+        "peak_bays_p95": peakP95,
+        "recommended_bays_p95": int(math.ceil(peakP95)),
+        "last_occupied_p90_hours": lastOccP90,
+        "last_occupied_p95_hours": lastOccP95,
+        "overall_last_occupied_hours": overallLast,
+        "recommended_close_p95": hoursToHHMM(lastOccP95),
+    }
+
+
+def evaluateCloseTimeCandidates(timePeriod, params, candidateHours=(17, 18, 19, 20, 21, 22, 23, 24)):
+    '''
+    Evaluate how much holding-bay demand remains after candidate close times.
+
+    IMPORTANT:
+    This measures occupancy remaining after close as a proxy.
+    It does NOT yet count exact patient admissions to hospital after close,
+    because the current model does not explicitly store patient-level recovery-end events.
+    '''
+    allDays = getHoldingBayOccupancyMatrix(timePeriod, params)
+    slotPerHour = 60.0 / params.resolution
+
+    results = []
+
+    for closeHour in candidateHours:
+        closeIdx = int(closeHour * slotPerHour)
+
+        totalSlotsAfterClose = 0
+        totalBayHoursAfterClose = 0.0
+        daysWithDemandAfterClose = 0
+
+        for occ in allDays:
+            after = occ[closeIdx:]
+            afterSum = sum(after)
+            totalSlotsAfterClose += afterSum
+
+            bayHours = afterSum * (params.resolution / 60.0)
+            totalBayHoursAfterClose += bayHours
+
+            if any(x > 0 for x in after):
+                daysWithDemandAfterClose += 1
+
+        results.append({
+            "close_hour": closeHour,
+            "close_time": hoursToHHMM(closeHour),
+            "days_with_any_demand_after_close": daysWithDemandAfterClose,
+            "total_bay_hours_after_close": totalBayHoursAfterClose,
+            "average_bay_hours_after_close_per_day": totalBayHoursAfterClose / float(timePeriod.numDays)
+        })
+
+    return results
+
+
+def buildScenarioSummary(timePeriod, procedures, params, priorityName="unknown"):
+    '''
+    Collect all metrics needed for planning recommendations.
+    '''
+    cathUtil, epUtil, avgUtilDay, avgUtilWeek, utilByRoom = timePeriod.getUtilizationStatistics(params)
+    hb = analyzeHoldingBayDemand(timePeriod, params)
+    closeEval = evaluateCloseTimeCandidates(timePeriod, params)
+
+    summary = {
+        "priority_rule": priorityName,
+        "total_procs": timePeriod.numTotalProcs,
+        "procs_placed": timePeriod.procsPlaced,
+        "overflow_total": timePeriod.overflowCath + timePeriod.overflowEP + timePeriod.overflowMiddle,
+        "overflow_cath": timePeriod.overflowCath,
+        "overflow_ep": timePeriod.overflowEP,
+        "overflow_middle": timePeriod.overflowMiddle,
+        "crossover_total": timePeriod.crossOverProcs,
+        "cath_utilization_avg": cathUtil,
+        "ep_utilization_avg": epUtil,
+        "mean_room_utilization": (cathUtil + epUtil) / 2.0,
+        "holding_bay": hb,
+        "close_time_eval": closeEval,
+        "avgUtilDay": avgUtilDay,
+        "avgUtilWeek": avgUtilWeek,
+        "utilByRoom": utilByRoom,
+        "timePeriod": timePeriod
+    }
+    return summary
+
+
+def printRecommendationReport(summary):
+    '''
+    Print a concise recommendation report for one scenario.
+    '''
+    hb = summary["holding_bay"]
+
+    print("\n*********PLANNING RECOMMENDATIONS*********")
+    print("Scheduling priority rule tested: " + str(summary["priority_rule"]))
+    print("Recommended holding bays to build (95th percentile daily peak): " + str(hb["recommended_bays_p95"]))
+    print("Conservative worst-case peak bays observed: " + str(hb["overall_peak_bays"]))
+    print("Recommended holding bay close time (95th percentile last occupied time): " + str(hb["recommended_close_p95"]))
+    print("Latest observed holding-bay occupancy in simulation: " + str(hoursToHHMM(hb["overall_last_occupied_hours"])))
+    print("Average room utilization across Cath and EP: " + str(round(summary["mean_room_utilization"], 4)))
+    print("Total procedures placed: " + str(summary["procs_placed"]))
+    print("Total procedures scheduled past room closing time: " + str(summary["overflow_total"]))
+
+    print("\nClose-time sensitivity (proxy using bay-hours after close):")
+    for row in summary["close_time_eval"]:
+        print(
+            "  Close @ {0}: days with demand after close = {1}, "
+            "total bay-hours after close = {2:.2f}, avg/day = {3:.4f}".format(
+                row["close_time"],
+                row["days_with_any_demand_after_close"],
+                row["total_bay_hours_after_close"],
+                row["average_bay_hours_after_close_per_day"]
+            )
+        )
+
+
+def comparePriorityRules(baseParams, priorities=None, saveResults=False):
+    '''
+    Run multiple scheduling policies and rank them.
+
+    Ranking logic:
+    1. Fewer overflow procedures
+    2. Lower 95th percentile holding-bay peak
+    3. Earlier 95th percentile last occupied time
+    4. Higher average room utilization
+    '''
+    if priorities is None:
+        priorities = PRIORITY_OPTIONS
+
+    results = []
+
+    for priorityName in priorities:
+        p = cloneParams(baseParams)
+        applyPriorityRule(p, priorityName)
+
+        timePeriod, summary = RunSimulation(
+            p,
+            saveOutputs=saveResults,
+            printStats=False,
+            printRecommendations=False
+        )
+
+        summary["priority_rule"] = priorityName
+        results.append(summary)
+
+    ranked = sorted(
+        results,
+        key=lambda x: (
+            x["overflow_total"],
+            x["holding_bay"]["peak_bays_p95"],
+            x["holding_bay"]["last_occupied_p95_hours"],
+            -x["mean_room_utilization"]
+        )
+    )
+
+    best = ranked[0]
+
+    print("\n============================================================")
+    print("COMPARISON OF SCHEDULING PRIORITY RULES")
+    print("============================================================")
+    for r in ranked:
+        print(
+            "{0}: overflow={1}, bays_p95={2}, close_p95={3}, mean_util={4:.4f}".format(
+                r["priority_rule"],
+                r["overflow_total"],
+                r["holding_bay"]["recommended_bays_p95"],
+                r["holding_bay"]["recommended_close_p95"],
+                r["mean_room_utilization"]
+            )
+        )
+
+    print("\nRecommended scheduling priority rule: " + str(best["priority_rule"]))
+    print("Recommended holding bays: " + str(best["holding_bay"]["recommended_bays_p95"]))
+    print("Recommended holding bay close time: " + str(best["holding_bay"]["recommended_close_p95"]))
+
+    return {
+        "best": best,
+        "ranked": ranked
+    }
+
 def RunSimulation(myP):
 
     ###### STEP 0: READ DATA / CREATE MODEL ######
