@@ -31,23 +31,26 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 # Presentation palette
-PRIMARY = "#2F5D62"      # deep teal
-SECONDARY = "#5E8B7E"    # muted green
-ACCENT = "#D9A441"       # muted gold
-BENCHMARK = "#A7B6C2"    # soft slate
-ALTERNATIVE = "#7FA7A6"  # light teal
-GRID = "#D9DEE3"
-TEXT = "#2B2B2B"
+# Economist-like presentation palette
+PRIMARY = "#C0392B"      # muted Economist-style red for recommendation
+SECONDARY = "#C0392B"    # keep recommendation consistent
+ACCENT = "#3B6EA5"       # restrained blue accent
+BENCHMARK = "#6B7A8F"    # blue-gray for existing plan
+ALTERNATIVE = "#D9DDE3"  # soft gray for other options
+GRID = "#E6E6E6"
+TEXT = "#222222"
+BG = "#F7F5F2"
 
 
 def _style_axes(ax, grid_axis="x"):
-    ax.grid(axis=grid_axis, alpha=0.6, color=GRID)
+    ax.set_facecolor(BG)
+    ax.grid(axis=grid_axis, alpha=1.0, color=GRID, linewidth=0.8)
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color("#B9C2CA")
-    ax.spines["bottom"].set_color("#B9C2CA")
-    ax.tick_params(colors=TEXT)
+    ax.spines["left"].set_visible(False)
+    ax.spines["bottom"].set_color("#CFCFCF")
+    ax.tick_params(colors=TEXT, length=0)
     ax.title.set_color(TEXT)
     ax.xaxis.label.set_color(TEXT)
     ax.yaxis.label.set_color(TEXT)
@@ -133,7 +136,7 @@ def _short_option_label(label: str) -> str:
 
 def plot_policy_overflow(results):
     df = _expand_policy_df(_ranked_to_df(results))
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
     ax.bar(df["priority_rule"], df["overflow_total"])
     ax.set_title("Late-running procedures by scheduling policy")
     ax.set_xlabel("Scheduling policy")
@@ -150,7 +153,7 @@ def plot_policy_utilization(results):
     x = range(len(df))
     width = 0.38
 
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
     ax.bar([i - width / 2 for i in x], df["cath_utilization_avg"], width=width, label="Cath")
     ax.bar([i + width / 2 for i in x], df["ep_utilization_avg"], width=width, label="EP")
 
@@ -167,7 +170,7 @@ def plot_policy_utilization(results):
 
 def plot_policy_hb_peaks(results):
     df = _expand_policy_df(_ranked_to_df(results))
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
     ax.bar(df["priority_rule"], df["recommended_bays_p95"])
     ax.set_title("Recommended holding bays (P95) by scheduling policy")
     ax.set_xlabel("Scheduling policy")
@@ -181,7 +184,7 @@ def plot_policy_hb_peaks(results):
 
 def plot_policy_close_burden(results):
     df = _expand_policy_df(_ranked_to_df(results))
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
     ax.bar(df["priority_rule"], df["last_occupied_p95_hours"])
     ax.set_title("P95 last occupied time by scheduling policy")
     ax.set_xlabel("Scheduling policy")
@@ -216,7 +219,7 @@ def plot_policy_summary_scorecard(results):
 
     x = range(len(df))
     width = 0.18
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(10, 5), facecolor=BG)
     for i, metric in enumerate(metrics):
         ax.bar([j + (i - 1.5) * width for j in x], df[metric], width=width, label=labels[i])
 
@@ -236,7 +239,7 @@ def plot_policy_summary_scorecard(results):
 
 def plot_close_time_sensitivity(summary):
     df = pd.DataFrame(summary["close_time_eval"])
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
     ax.plot(df["close_time"], df["total_bay_hours_after_close"], marker="o")
     ax.set_title("Holding-bay demand remaining after closing time")
     ax.set_xlabel("Candidate close time")
@@ -249,7 +252,7 @@ def plot_close_time_sensitivity(summary):
 
 def plot_close_time_days_with_demand(summary):
     df = pd.DataFrame(summary["close_time_eval"])
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
     ax.bar(df["close_time"], df["days_with_any_demand_after_close"])
     ax.set_title("Days with any demand after close")
     ax.set_xlabel("Candidate close time")
@@ -266,7 +269,7 @@ def plot_close_time_days_with_demand(summary):
 
 def plot_hb_total_cost(summary):
     df = summary["cost_analysis"]["hb"]["cost_table"].copy().sort_values("hb_count")
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(8, 5), facecolor=BG)
     ax.plot(df["hb_count"], df["total_holding_bay_cost"], marker="o")
     ax.set_title("Total holding-bay cost by bay count")
     ax.set_xlabel("Number of holding bays")
@@ -278,7 +281,7 @@ def plot_hb_total_cost(summary):
 
 def plot_hb_cost_components(summary):
     df = summary["cost_analysis"]["hb"]["cost_table"].copy().sort_values("hb_count")
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
     ax.bar(df["hb_count"], df["cancellation_cost"], label="Cancellation cost")
     ax.bar(df["hb_count"], df["empty_holding_bay_cost"], bottom=df["cancellation_cost"], label="Empty-bay cost")
     ax.set_title("Holding-bay cost components")
@@ -299,7 +302,7 @@ def plot_hb_service_constraint(summary):
     if "days_with_instances" not in df.columns:
         raise ValueError("HB cost table does not include 'days_with_instances'.")
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(8, 5), facecolor=BG)
     ax.plot(df["hb_count"], df["days_with_instances"], marker="o")
     ax.axhline(threshold_days, linestyle="--", label=f"Service threshold ({threshold_days:.0f} days)")
     ax.set_title("Service constraint by holding-bay count")
@@ -313,7 +316,7 @@ def plot_hb_service_constraint(summary):
 
 def plot_close_time_total_cost(summary):
     df = summary["cost_analysis"]["close"]["cost_table"].copy().sort_values("close_hours")
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
     ax.plot(df["close_time_hhmm"], df["total_cost"], marker="o")
     ax.set_title("Total cost by holding-bay close time")
     ax.set_xlabel("Holding-bay close time")
@@ -326,7 +329,7 @@ def plot_close_time_total_cost(summary):
 
 def plot_close_time_cost_components(summary):
     df = summary["cost_analysis"]["close"]["cost_table"].copy().sort_values("close_hours")
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
     ax.bar(df["close_time_hhmm"], df["estimated_labor_cost"], label="Labor cost")
     ax.bar(df["close_time_hhmm"], df["admission_cost"], bottom=df["estimated_labor_cost"], label="Admission cost")
     ax.set_title("Close-time cost components")
@@ -376,7 +379,7 @@ def options_to_df(options):
 
 
 
-def plot_option_total_cost(options):
+def plot_option_total_cost(options, title=None, subtitle=None, source_note=None):
     df = options_to_df(options).copy()
     df["label_short"] = df["option_name"].apply(_short_option_label)
     df = df.sort_values("total_cost", ascending=True)
@@ -390,17 +393,25 @@ def plot_option_total_cost(options):
         else:
             colors.append(ALTERNATIVE)
 
-    fig, ax = plt.subplots(figsize=(9, 5))
-    ax.barh(df["label_short"], df["total_cost"], color=colors)
-    ax.set_title("Total annual cost by option")
-    ax.set_xlabel("Estimated total cost")
+    fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
+    ax.barh(df["label_short"], df["total_cost"], color=colors, height=0.65)
+    ax.set_title(
+        title or "Recommended redesign keeps annual cost below the existing plan",
+        loc="left", fontsize=14, fontweight="bold"
+    )
+    if subtitle:
+        ax.text(0, 1.04, subtitle, transform=ax.transAxes, ha="left", va="bottom", fontsize=9, color=TEXT)
+    ax.set_xlabel("Estimated total cost ($)")
     ax.set_ylabel("")
     _style_axes(ax, grid_axis="x")
 
     for i, v in enumerate(df["total_cost"]):
-        ax.text(v, i, f"  ${v:,.0f}", va="center", fontsize=9)
+        ax.text(v, i, f"  ${v:,.0f}", va="center", fontsize=9, color=TEXT)
 
-    fig.tight_layout()
+    if source_note:
+        fig.text(0.01, 0.01, source_note, ha="left", va="bottom", fontsize=8, color="#666666")
+
+    fig.tight_layout(rect=(0, 0.03, 1, 1))
     return fig
 
 
@@ -410,7 +421,7 @@ def plot_option_cost_components(options):
     hb = df["total_holding_bay_cost"] if "total_holding_bay_cost" in df.columns else pd.Series([0.0] * len(df))
     close = df["total_close_cost"] if "total_close_cost" in df.columns else pd.Series([0.0] * len(df))
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(10, 5), facecolor=BG)
     ax.bar(df["option_name"], hb, label="Holding-bay cost")
     ax.bar(df["option_name"], close, bottom=hb, label="Close-time cost")
     ax.set_title("Cost components by recommendation option")
@@ -423,7 +434,7 @@ def plot_option_cost_components(options):
 
 
 
-def plot_option_overflow(options):
+def plot_option_overflow(options, title=None, subtitle=None, source_note=None):
     df = options_to_df(options).copy()
     if "overflow_total" not in df.columns:
         raise ValueError("Each option must include 'overflow_total'.")
@@ -439,57 +450,80 @@ def plot_option_overflow(options):
         else:
             colors.append(ALTERNATIVE)
 
-    fig, ax = plt.subplots(figsize=(9, 5))
-    ax.barh(df["label_short"], df["overflow_total"], color=colors)
-    ax.set_title("Late-running procedures by option")
+    fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
+    ax.barh(df["label_short"], df["overflow_total"], color=colors, height=0.65)
+    ax.set_title(
+        title or "Scheduling by longest recovery time reduces late-running procedures",
+        loc="left", fontsize=14, fontweight="bold"
+    )
+    if subtitle:
+        ax.text(0, 1.04, subtitle, transform=ax.transAxes, ha="left", va="bottom", fontsize=9, color=TEXT)
     ax.set_xlabel("Procedures scheduled past room closing")
     ax.set_ylabel("")
     _style_axes(ax, grid_axis="x")
 
     for i, v in enumerate(df["overflow_total"]):
-        ax.text(v, i, f"  {int(v)}", va="center", fontsize=9)
+        ax.text(v, i, f"  {int(v)}", va="center", fontsize=9, color=TEXT)
 
-    fig.tight_layout()
+    if source_note:
+        fig.text(0.01, 0.01, source_note, ha="left", va="bottom", fontsize=8, color="#666666")
+
+    fig.tight_layout(rect=(0, 0.03, 1, 1))
     return fig
 
 
 
-def plot_option_tradeoff_scatter(options, x_col="overflow_total", y_col="total_cost", label_col="option_name"):
+def plot_option_tradeoff_scatter(options, x_col="overflow_total", y_col="total_cost", label_col="option_name", title=None, subtitle=None, source_note=None):
     df = options_to_df(options).copy()
     if x_col not in df.columns or y_col not in df.columns:
         raise ValueError(f"Options must include '{x_col}' and '{y_col}'.")
     df["label_short"] = df[label_col].apply(_short_option_label)
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(8, 6), facecolor=BG)
 
     base = df[(~df["is_existing_plan"]) & (~df["is_recommended"])]
     existing = df[df["is_existing_plan"]]
     recommended = df[df["is_recommended"]]
 
     if len(base) > 0:
-        ax.scatter(base[x_col], base[y_col], label="Alternative", color=ALTERNATIVE, s=70)
+        ax.scatter(base[x_col], base[y_col], color=ALTERNATIVE, s=55)
     if len(existing) > 0:
-        ax.scatter(existing[x_col], existing[y_col], label="Existing plan", color=BENCHMARK, marker="s", s=110)
+        ax.scatter(existing[x_col], existing[y_col], color=BENCHMARK, marker="s", s=110)
     if len(recommended) > 0:
-        ax.scatter(recommended[x_col], recommended[y_col], label="Recommended", color=SECONDARY, marker="*", s=260)
+        ax.scatter(recommended[x_col], recommended[y_col], color=SECONDARY, marker="*", s=240)
 
-    for _, row in df.iterrows():
-        ax.annotate(row["label_short"], (row[x_col], row[y_col]), textcoords="offset points", xytext=(6, 6), fontsize=9)
+    for _, row in existing.iterrows():
+        ax.annotate(row["label_short"], (row[x_col], row[y_col]), textcoords="offset points", xytext=(6, 6), fontsize=8, color=TEXT)
+    for _, row in recommended.iterrows():
+        ax.annotate(row["label_short"], (row[x_col], row[y_col]), textcoords="offset points", xytext=(6, 6), fontsize=8, color=TEXT)
+    for _, row in base.iterrows():
+        ax.annotate(row["label_short"], (row[x_col], row[y_col]), textcoords="offset points", xytext=(4, 4), fontsize=7, color="#777777")
 
-    ax.set_title("Cost vs late-running procedures")
+    ax.set_title(
+        title or "The recommended package improves flow without raising total cost",
+        loc="left", fontsize=14, fontweight="bold"
+    )
+    if subtitle:
+        ax.text(0, 1.04, subtitle, transform=ax.transAxes, ha="left", va="bottom", fontsize=9, color=TEXT)
     ax.set_xlabel("Procedures scheduled past room closing")
-    ax.set_ylabel("Estimated total cost")
-    ax.grid(alpha=0.25)
+    ax.set_ylabel("Estimated total cost ($)")
+    ax.grid(alpha=1.0, color=GRID, linewidth=0.8)
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.legend(frameon=False)
-    fig.tight_layout()
+    ax.spines["left"].set_color("#CFCFCF")
+    ax.spines["bottom"].set_color("#CFCFCF")
+    ax.tick_params(colors=TEXT, length=0)
+
+    if source_note:
+        fig.text(0.01, 0.01, source_note, ha="left", va="bottom", fontsize=8, color="#666666")
+
+    fig.tight_layout(rect=(0, 0.03, 1, 1))
     return fig
 
 
 
-def plot_option_scorecard(options):
+def plot_option_scorecard(options, title=None, subtitle=None, source_note=None):
     """
     Clearer comparison vs the existing plan.
     Shows percentage improvement where possible.
@@ -507,13 +541,13 @@ def plot_option_scorecard(options):
     for _, row in others.iterrows():
         record = {"label_short": row["label_short"]}
         if pd.notna(row.get("overflow_total")) and pd.notna(base.get("overflow_total")) and base["overflow_total"] != 0:
-            record["Overflow reduction %"] = 100.0 * (base["overflow_total"] - row["overflow_total"]) / base["overflow_total"]
+            record["Late procedures"] = 100.0 * (base["overflow_total"] - row["overflow_total"]) / base["overflow_total"]
         if pd.notna(row.get("total_cost")) and pd.notna(base.get("total_cost")) and base["total_cost"] != 0:
-            record["Cost reduction %"] = 100.0 * (base["total_cost"] - row["total_cost"]) / base["total_cost"]
+            record["Total cost"] = 100.0 * (base["total_cost"] - row["total_cost"]) / base["total_cost"]
         if pd.notna(row.get("mean_room_utilization")) and pd.notna(base.get("mean_room_utilization")) and base["mean_room_utilization"] != 0:
-            record["Utilization change %"] = 100.0 * (row["mean_room_utilization"] - base["mean_room_utilization"]) / base["mean_room_utilization"]
+            record["Utilization"] = 100.0 * (row["mean_room_utilization"] - base["mean_room_utilization"]) / base["mean_room_utilization"]
         if pd.notna(row.get("days_with_instances")) and pd.notna(base.get("days_with_instances")) and base["days_with_instances"] != 0:
-            record["Overcapacity-day reduction %"] = 100.0 * (base["days_with_instances"] - row["days_with_instances"]) / base["days_with_instances"]
+            record["Overcapacity days"] = 100.0 * (base["days_with_instances"] - row["days_with_instances"]) / base["days_with_instances"]
         rows.append(record)
 
     comp = pd.DataFrame(rows).fillna(0.0)
@@ -522,10 +556,10 @@ def plot_option_scorecard(options):
         raise ValueError("No comparable metrics found for scorecard.")
 
     x = range(len(comp))
-    width = 0.8 / len(metrics)
-    fig, ax = plt.subplots(figsize=(11, 5))
+    width = 0.72 / len(metrics)
+    fig, ax = plt.subplots(figsize=(11, 5), facecolor=BG)
 
-    palette = [PRIMARY, ACCENT, SECONDARY, BENCHMARK]
+    palette = [PRIMARY, ACCENT, BENCHMARK, "#A88E62"]
     for i, metric in enumerate(metrics):
         offset = (i - (len(metrics) - 1) / 2.0) * width
         ax.bar([j + offset for j in x], comp[metric], width=width, label=metric, color=palette[i % len(palette)])
@@ -534,10 +568,19 @@ def plot_option_scorecard(options):
     ax.set_xticks(list(x))
     ax.set_xticklabels(comp["label_short"])
     ax.set_ylabel("Improvement vs existing plan (%)")
-    ax.set_title("Improvement relative to existing plan")
-    ax.legend(frameon=False, fontsize=9)
+    ax.set_title(
+        title or "The recommended redesign outperforms the existing plan on key metrics",
+        loc="left", fontsize=14, fontweight="bold"
+    )
+    if subtitle:
+        ax.text(0, 1.04, subtitle, transform=ax.transAxes, ha="left", va="bottom", fontsize=9, color=TEXT)
+    ax.legend(frameon=False, fontsize=9, labelcolor=TEXT, ncol=min(len(metrics), 4), loc="upper left")
     _style_axes(ax, grid_axis="y")
-    fig.tight_layout()
+
+    if source_note:
+        fig.text(0.01, 0.01, source_note, ha="left", va="bottom", fontsize=8, color="#666666")
+
+    fig.tight_layout(rect=(0, 0.03, 1, 1))
     return fig
 
 
@@ -599,7 +642,7 @@ def add_existing_plan_option(options, *, hb_count=21, close_time="24:00", priori
 # Convenience bundle
 # -----------------------------------------------------------------------------
 
-def build_all_key_figures(summary, policy_results=None, options=None):
+def build_all_key_figures(summary, policy_results=None, options=None, source_note=None):
     figs = {
         "close_time_sensitivity": plot_close_time_sensitivity(summary),
         "close_time_days_with_demand": plot_close_time_days_with_demand(summary),
@@ -621,11 +664,11 @@ def build_all_key_figures(summary, policy_results=None, options=None):
 
     if options is not None:
         figs.update({
-            "option_total_cost": plot_option_total_cost(options),
+            "option_total_cost": plot_option_total_cost(options, source_note=source_note),
+            "option_overflow": plot_option_overflow(options, source_note=source_note),
+            "option_tradeoff": plot_option_tradeoff_scatter(options, source_note=source_note),
+            "option_scorecard": plot_option_scorecard(options, source_note=source_note),
             "option_cost_components": plot_option_cost_components(options),
-            "option_overflow": plot_option_overflow(options),
-            "option_tradeoff": plot_option_tradeoff_scatter(options),
-            "option_scorecard": plot_option_scorecard(options),
         })
 
     return figs
