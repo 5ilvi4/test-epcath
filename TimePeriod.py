@@ -291,7 +291,7 @@ class TimePeriod:
 
         if params.middleRoomPreRandom and params.schedMRinHB:
             for proc in allProcs:
-                preTime = random.gauss(desiredPreMeanMR, desiredPreStDevMR)
+                preTime = random.gauss(params.desiredPreMeanMR, params.desiredPreStDevMR)
                 proc[params.iPreTime] = preTime if proc[params.iRoom]==3.0 else proc[params.iPreTime]
 
         if params.middleRoomPostRandom and params.schedMRinHB:
@@ -317,7 +317,7 @@ class TimePeriod:
                 
         if params.multPostProcTime:
             for proc in allProcs:
-                postTime = PostProcMult*proc[params.iPostTime]
+                postTime = params.PostProcMult * proc[params.iPostTime]
                 proc[params.iPostTime] = postTime            
             
         if params.ConvertPreProcToHours:
@@ -336,7 +336,7 @@ class TimePeriod:
             for proc in allProcs:            
                 if proc[params.iProvider] in list(params.providerChanges.keys()):
                     procDOW = (proc[params.iDay]-1)%5
-                    change = providerChanges[proc[params.iProvider]]
+                    change = params.providerChanges[proc[params.iProvider]]
                     fromDay = change[0]
                     toDay = change[1]
                     proc[params.iDay] += (toDay-fromDay) if procDOW==change[0] else 0
@@ -347,11 +347,11 @@ class TimePeriod:
             for proc in allProcs:
                 if proc[params.iProvider] in list(params.providerSwaps.keys()):
                     procDOW = (proc[params.iDay]-1)%5
-                    fromDay = providerSwaps[proc[params.iProvider]][0]
-                    toDay = providerSwaps[proc[params.iProvider]][1]
+                    fromDay = params.providerSwaps[proc[params.iProvider]][0]
+                    toDay = params.providerSwaps[proc[params.iProvider]][1]
                     if procDOW in (fromDay,toDay):
                         providerDict[proc[params.iProvider]][0].append(proc) if procDOW == fromDay else providerDict[proc[params.iProvider]][1].append(proc)
-            for provider in list(providerSwaps.keys()):
+            for provider in list(params.providerSwaps.keys()):
                 swap = providerSwaps[provider]
                 fromDay = swap[0]
                 toDay = swap[1]
@@ -615,7 +615,7 @@ class TimePeriod:
     def getProcsByMinuteVolume(self,allProcs, params):
         '''
         '''
-        emergencies = [x for x in allProcs if x[params.iSchedHorizon]==1.0]
+        emergencies = [x for x in allProcs if x[params.iSchedHorizon] == 0.0]
         sameDay = [x for x in allProcs if x[params.iSchedHorizon]==2.0]
         sameWeek = [x for x in allProcs if x[params.iSchedHorizon]==3.0]
 
