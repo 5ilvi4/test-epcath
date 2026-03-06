@@ -10,6 +10,7 @@ import csv
 import os
 import math
 import copy
+import random
 from types import SimpleNamespace
 
 import pandas
@@ -99,7 +100,7 @@ def cleanProcTimes(allProcs, iProcTime, turnover, totalTimeRoom):
 
 def saveSchedulingResults(timePeriod,workbook,readable):
 
-    out = open(workbook,'wb')
+    out = open(workbook,'w', encoding='utf-8')
     writer = csv.writer(out)
 
     days = timePeriod.numDays
@@ -183,21 +184,16 @@ def getMaxShifts(timePeriod):
 
 def saveHoldingBayResults(timePeriod,workbook, params):
 
-    #out = open(workbook,'wb') #orig
-    out = open(workbook,'w', encoding='utf-8') #Cindie Edit/Check
+    out = open(workbook,'w', encoding='utf-8')
     writer = csv.writer(out)
 
     multiple = 60.0/params.resolution
     times = [i for i in range(int(params.HBCloseTime*multiple))]
     columns = ["Day"]
     for time in times:
-        #hours = math.floor(time)
-        #minutes = (time - math.floor(time))*60
-        #columns.append(str(int(hours))+":"+str(int(minutes)))
         hours = math.floor(time/multiple)
         minutes = (time - hours*multiple)*params.resolution
-        columns.append(str(int(hours))+":"+str(format(int(minutes), '02d'))) #orig
-        #columns.append((str(int(hours))+":"+str(format(int(minutes), '02d'))).encode(encoding='UTF-8'))
+        columns.append(str(int(hours))+":"+str(format(int(minutes), '02d')))
     writer.writerow(columns)
     
     data = []
@@ -210,96 +206,77 @@ def saveHoldingBayResults(timePeriod,workbook, params):
     writer.writerows(data)
 
 def printOutputStatistics(timePeriod, procedures, params):
-    print ("\n...Done!")
+    print("\n...Done!")
     
-    print ("\n*********PARAMETERS*********")
-    print ("Procedure Sorting Priority: " + str(params.wSortPriority.value))
-    print ("\tsortProcs: " + str(params.sortProcs))
-    print ("\tsortIndex: " + str(params.sortIndex))
-    print ("\tsortDescend: " + str(params.sortDescend))
-    print ("Scenario: " + str(params.wFiles.value))
-    print ("\tprocDataFile: " + str(params.procDataFile))
-    print ("\tshiftDataFile: " + str(params.shiftDataFile))
-    print ("Mean HB Cleaning Time (hours): " + str(params.desiredPreCleanMean))
-    print ("Resolution (minutes): " + str(params.resolution))
+    print("\n*********PARAMETERS*********")
+    print("Procedure Sorting Priority: " + str(params.wSortPriority.value))
+    print("\tsortProcs: " + str(params.sortProcs))
+    print("\tsortIndex: " + str(params.sortIndex))
+    print("\tsortDescend: " + str(params.sortDescend))
+    print("Scenario: " + str(params.wFiles.value))
+    print("\tprocDataFile: " + str(params.procDataFile))
+    print("\tshiftDataFile: " + str(params.shiftDataFile))
+    print("Mean HB Cleaning Time (hours): " + str(params.desiredPreCleanMean))
+    print("Resolution (minutes): " + str(params.resolution))
     
-    print ("Cath rooms: "+str(params.numCathRooms))
-    print ("EP rooms: "+str(params.numEPRooms))
-##    print "Cath rooms used for non-emergencies: "+str(numRestrictedCath)
-##    print "EP rooms used for non-emergencies: "+str(numRestrictedEP)
-##    print "Crossover policy: "+str(crossoverType)
-##    print "Pair weeks for scheduling? "+str(weekPairs)
-##    print "Pair days for scheduling? "+str(dayPairs)
-##    print "Schedule all procedures on same day as historically? "+str(sameDaysOnly)
-##    print "Placement priority: "+str(priority)
-    print ("Post procedure determination random? "+str(params.postProcRandom))
-    print ("Pre procedure time converted to hours? "+str(params.ConvertPreProcToHours))
-    print ("Change provider days? "+str(params.ChangeProviderDays))
-    print ("Swap provider days? "+str(params.SwapProviderDays))
-    print ("Pre procedure cap implemented? "+str(params.CapHBPreProc))
+    print("Cath rooms: "+str(params.numCathRooms))
+    print("EP rooms: "+str(params.numEPRooms))
+    print("Post procedure determination random? "+str(params.postProcRandom))
+    print("Pre procedure time converted to hours? "+str(params.ConvertPreProcToHours))
+    print("Change provider days? "+str(params.ChangeProviderDays))
+    print("Swap provider days? "+str(params.SwapProviderDays))
+    print("Pre procedure cap implemented? "+str(params.CapHBPreProc))
 
-    print ("\n*********PROCEDURE DATA*********")
-    print ("Total procedures: "+str(timePeriod.numTotalProcs))
-    print ("Same days: "+str(timePeriod.numSameDays))
-    print ("Same weeks: "+str(timePeriod.numSameWeeks))
-    print ("Emergencies: "+str(timePeriod.numEmergencies))
+    print("\n*********PROCEDURE DATA*********")
+    print("Total procedures: "+str(timePeriod.numTotalProcs))
+    print("Same days: "+str(timePeriod.numSameDays))
+    print("Same weeks: "+str(timePeriod.numSameWeeks))
+    print("Emergencies: "+str(timePeriod.numEmergencies))
     minutes = timePeriod.getProcsByMinuteVolume(procedures, params)
     for x in range(6):
         minutes[x] = round(minutes[x],2)
-    print ("\tBREAKDOWN BY MINUTES")
-    print ("\tSame week flex: "+str(minutes[4])+" minutes")
-    print ("\tSame week inflex: "+str(minutes[5])+" minutes")
-    print ("\tSame day flex: "+str(minutes[2])+" minutes")
-    print ("\tSame day inflex: "+str(minutes[3])+" minutes")
-    print ("\tEmergency flex: "+str(minutes[0])+" minutes")
-    print ("\tEmergency inflex: "+str(minutes[1])+" minutes")
+    print("\tBREAKDOWN BY MINUTES")
+    print("\tSame week flex: "+str(minutes[4])+" minutes")
+    print("\tSame week inflex: "+str(minutes[5])+" minutes")
+    print("\tSame day flex: "+str(minutes[2])+" minutes")
+    print("\tSame day inflex: "+str(minutes[3])+" minutes")
+    print("\tEmergency flex: "+str(minutes[0])+" minutes")
+    print("\tEmergency inflex: "+str(minutes[1])+" minutes")
 
     
-    print ("\n*********OVERFLOW STATS*********")
-    print ("Total of "+str(timePeriod.procsPlaced)+" procedures placed")
-    print ("Total procedures scheduled past closing time: "+str(timePeriod.overflowCath+timePeriod.overflowEP))
-    print ("\tCath overflow: "+str(timePeriod.overflowCath))
-    print ("\tEP overflow: "+str(timePeriod.overflowEP))
-    print ("\t---")
-    print ("\tQuarter day shift overflows: "+str(timePeriod.overflowQuarter))
-    print ("\tHalf day shift overflows: "+str(timePeriod.overflowHalf))
-    print ("\tFull day shift overflows: "+str(timePeriod.overflowFull))
-    print ("Same day/emergencies overflow during days (0 index): "+str(sorted(timePeriod.overflowDays)))
-    minutesPlaced = timePeriod.getProcsByMinuteVolume(timePeriod.procsPlacedData, params)
-##    print ("\tBREAKDOWN BY MINUTES PLACED")
-##    modifiedMinutes = [0]*6
-##    for x in range(6):
-##        minutesPlaced[x] = round(minutesPlaced[x],2)
-##        modifiedMinutes[x] = 100 if minutes[x]==0 else minutes[x]
-##    print ("\tSame week flex: "+str(minutesPlaced[4])+" out of "+str(minutes[4])+" minutes placed ("+str(round((minutesPlaced[4]/(modifiedMinutes[4])*100),2))+"%)")
-##    print ("\tSame week inflex: "+str(minutesPlaced[5])+" out of "+str(minutes[5])+" minutes placed ("+str(round((minutesPlaced[5]/(modifiedMinutes[5])*100),2))+"%)")
-##    print ("\tSame day flex: "+str(minutesPlaced[2])+" out of "+str(minutes[2])+" minutes placed ("+str(round((minutesPlaced[2]/(modifiedMinutes[2])*100),2))+"%)")
-##    print ("\tSame day inflex: "+str(minutesPlaced[3])+" out of "+str(minutes[3])+" minutes placed ("+str(round((minutesPlaced[3]/(modifiedMinutes[3])*100),2))+"%)")
-##    print ("\tEmergency flex: "+str(minutesPlaced[0])+" out of "+str(minutes[0])+" minutes placed ("+str(round((minutesPlaced[0]/(modifiedMinutes[0])*100),2))+"%)")
-##    print ("\tEmergency inflex: "+str(minutesPlaced[1])+" out of "+str(minutes[1])+" minutes placed ("+str(round((minutesPlaced[1]/(modifiedMinutes[1])*100),2))+"%)"+"\n")
+    print("\n*********OVERFLOW STATS*********")
+    print("Total of "+str(timePeriod.procsPlaced)+" procedures placed")
+    print("Total procedures scheduled past closing time: "+str(timePeriod.overflowCath+timePeriod.overflowEP))
+    print("\tCath overflow: "+str(timePeriod.overflowCath))
+    print("\tEP overflow: "+str(timePeriod.overflowEP))
+    print("\t---")
+    print("\tQuarter day shift overflows: "+str(timePeriod.overflowQuarter))
+    print("\tHalf day shift overflows: "+str(timePeriod.overflowHalf))
+    print("\tFull day shift overflows: "+str(timePeriod.overflowFull))
+    print("Same day/emergencies overflow during days (0 index): "+str(sorted(timePeriod.overflowDays)))
     
-    print ("\n*********CROSSOVER STATS*********")
-    print ("Total number of crossover procedures: "+str(timePeriod.crossOverProcs))
-    print ("Total number of Cath procedures in EP: "+str(timePeriod.cathToEP))
-    print ("Total number of EP procedures in Cath: "+str(timePeriod.epToCath))
+    print("\n*********CROSSOVER STATS*********")
+    print("Total number of crossover procedures: "+str(timePeriod.crossOverProcs))
+    print("Total number of Cath procedures in EP: "+str(timePeriod.cathToEP))
+    print("Total number of EP procedures in Cath: "+str(timePeriod.epToCath))
     
-    print ("\n*********UTILIZATION STATS*********")
+    print("\n*********UTILIZATION STATS*********")
     cath, ep, avgUtilDay, avgUtilWeek, util = timePeriod.getUtilizationStatistics(params)
-    print ("Average utilization in Cath over time period: "+str(cath))
-    print ("Average utilization in EP over time period: "+str(ep))
-    print ("\nType: 'avgUtilDay[_day_]' to view average utilization in Cath and EP on a given day (indexed from 0)")
-    print ("Type: 'avgUtilWeek[_week_]' to view average utilization in Cath and EP during a given week (indexed from 0)")
-    print ("Type: 'printSchedule(_day_,_labID_,_room_)' to see a specific room day schedule (indexed from 0)")
+    print("Average utilization in Cath over time period: "+str(cath))
+    print("Average utilization in EP over time period: "+str(ep))
+    print("\nType: 'avgUtilDay[_day_]' to view average utilization in Cath and EP on a given day (indexed from 0)")
+    print("Type: 'avgUtilWeek[_week_]' to view average utilization in Cath and EP during a given week (indexed from 0)")
+    print("Type: 'printSchedule(_day_,_labID_,_room_)' to see a specific room day schedule (indexed from 0)")
 
     return avgUtilDay,avgUtilWeek
 
 def printSchedule(day,lab,room):
     rooms = timePeriod.bins[0]
-    print ("Day: "+str(day)+" Lab: "+str(lab)+" Room: "+str(room))
+    print("Day: "+str(day)+" Lab: "+str(lab)+" Room: "+str(room))
     if lab != middleID:
         shifts = timePeriod.bins[3]
         daysShifts = shifts[day].rooms[(lab,room)]
-        print ("Day's Shifts: "+str(daysShifts))
+        print("Day's Shifts: "+str(daysShifts))
     s = rooms[(day,lab,room)]
     times = s.timeSlots.keys()
     times.sort(key=lambda x:(x[0],x[1]))
@@ -311,11 +288,11 @@ def printSchedule(day,lab,room):
                 procID = s.timeSlots[t][0][10]
                 if procID not in seen:
                     seen.add(procID)
-                    print (str(t)+": "+str(s.timeSlots[t][0]))
+                    print(str(t)+": "+str(s.timeSlots[t][0]))
                 else:
-                    print (str(t)+": *")                     
+                    print(str(t)+": *")                     
             else:
-                print (str(t)+": ")
+                print(str(t)+": ")
 
 
 
@@ -544,17 +521,23 @@ def printRecommendationReport(summary):
     '''
     hb = summary["holding_bay"]
 
-    print("\n*********PLANNING RECOMMENDATIONS*********")
+    print("\n" + "="*60)
+    print("*********PLANNING RECOMMENDATIONS*********")
+    print("="*60)
     print("Scheduling priority rule tested: " + str(summary["priority_rule"]))
+    print("\n--- HOLDING BAY RECOMMENDATIONS ---")
     print("Recommended holding bays to build (95th percentile daily peak): " + str(hb["recommended_bays_p95"]))
     print("Conservative worst-case peak bays observed: " + str(hb["overall_peak_bays"]))
-    print("Recommended holding bay close time (95th percentile last occupied time): " + str(hb["recommended_close_p95"]))
+    print("\n--- CLOSE TIME RECOMMENDATIONS ---")
+    print("Recommended holding bay close time (95th percentile last occupied): " + str(hb["recommended_close_p95"]))
     print("Latest observed holding-bay occupancy in simulation: " + str(hoursToHHMM(hb["overall_last_occupied_hours"])))
+    print("\n--- UTILIZATION AND OVERFLOW ---")
     print("Average room utilization across Cath and EP: " + str(round(summary["mean_room_utilization"], 4)))
     print("Total procedures placed: " + str(summary["procs_placed"]))
     print("Total procedures scheduled past room closing time: " + str(summary["overflow_total"]))
 
-    print("\nClose-time sensitivity (proxy using bay-hours after close):")
+    print("\n--- CLOSE-TIME SENSITIVITY ANALYSIS ---")
+    print("(proxy using bay-hours after close):")
     for row in summary["close_time_eval"]:
         print(
             "  Close @ {0}: days with demand after close = {1}, "
@@ -565,6 +548,7 @@ def printRecommendationReport(summary):
                 row["average_bay_hours_after_close_per_day"]
             )
         )
+    print("="*60)
 
 
 def comparePriorityRules(baseParams, priorities=None, saveResults=False):
@@ -582,7 +566,12 @@ def comparePriorityRules(baseParams, priorities=None, saveResults=False):
 
     results = []
 
+    print("\n" + "="*60)
+    print("RUNNING COMPARISON OF SCHEDULING PRIORITY RULES")
+    print("="*60)
+
     for priorityName in priorities:
+        print(f"\nTesting: {priorityName}...")
         p = cloneParams(baseParams)
         applyPriorityRule(p, priorityName)
 
@@ -608,12 +597,13 @@ def comparePriorityRules(baseParams, priorities=None, saveResults=False):
 
     best = ranked[0]
 
-    print("\n============================================================")
-    print("COMPARISON OF SCHEDULING PRIORITY RULES")
-    print("============================================================")
-    for r in ranked:
+    print("\n" + "="*60)
+    print("COMPARISON RESULTS - RANKED BY PERFORMANCE")
+    print("="*60)
+    for i, r in enumerate(ranked, 1):
         print(
-            "{0}: overflow={1}, bays_p95={2}, close_p95={3}, mean_util={4:.4f}".format(
+            "#{0} {1}: overflow={2}, bays_p95={3}, close_p95={4}, mean_util={5:.4f}".format(
+                i,
                 r["priority_rule"],
                 r["overflow_total"],
                 r["holding_bay"]["recommended_bays_p95"],
@@ -622,9 +612,13 @@ def comparePriorityRules(baseParams, priorities=None, saveResults=False):
             )
         )
 
-    print("\nRecommended scheduling priority rule: " + str(best["priority_rule"]))
+    print("\n" + "="*60)
+    print("BEST POLICY RECOMMENDATION")
+    print("="*60)
+    print("Recommended scheduling priority rule: " + str(best["priority_rule"]))
     print("Recommended holding bays: " + str(best["holding_bay"]["recommended_bays_p95"]))
     print("Recommended holding bay close time: " + str(best["holding_bay"]["recommended_close_p95"]))
+    print("="*60 + "\n")
 
     return {
         "best": best,
@@ -713,15 +707,20 @@ def printCostRecommendations(cost_results):
     hb_cost = cost_results["hb"]["cost_recommendation"]
     close_cost = cost_results["close"]["cost_recommendation"]
 
-    print("\n*********COST-BASED DECISION SUPPORT*********")
+    print("\n" + "="*60)
+    print("*********COST-BASED DECISION SUPPORT*********")
+    print("="*60)
+    print("--- HOLDING BAY COST ANALYSIS ---")
     print("Holding bays meeting service constraint (<=10% days with overcapacity): " + str(int(hb_service["hb_count"])))
     print("Holding bays minimizing total holding-bay cost: " + str(int(hb_cost["hb_count"])))
     print("Minimum holding-bay total cost: $" + str(round(hb_cost["total_holding_bay_cost"], 2)))
-
+    
+    print("\n--- CLOSE TIME COST ANALYSIS ---")
     print("Best holding-bay close time by total cost: " + str(close_cost["close_time_hhmm"]))
     print("Estimated labor cost at best close time: $" + str(round(close_cost["estimated_labor_cost"], 2)))
     print("Estimated admission cost at best close time: $" + str(round(close_cost["admission_cost"], 2)))
     print("Estimated total cost at best close time: $" + str(round(close_cost["total_cost"], 2)))
+    print("="*60 + "\n")
 
 
 def renderVisualizationFigures(figs, showFigures=True, saveFigures=False, outDir="OutputData/Figures"):
@@ -747,7 +746,7 @@ def RunSimulation(
     saveVisualizations=False,
     policyResults=None,
     comparisonOptions=None,
-    visualizationSourceNote="Source: EP/CATH simulation based on July 2015 case inputs; authors’ analysis."
+    visualizationSourceNote="Source: EP/CATH simulation based on July 2015 case inputs; authors' analysis."
 ):
 
     ###### STEP 0: READ DATA / CREATE MODEL ######
@@ -793,41 +792,106 @@ def RunSimulation(
 
     summary = buildScenarioSummary(timePeriod, procedures, myP, priorityName=priorityName)
 
-    cost_results = runCostAnalysis()
-    summary["cost_analysis"] = cost_results
+    ###### STEP 6: RUN COST ANALYSIS ######
+    try:
+        cost_results = runCostAnalysis()
+        summary["cost_analysis"] = cost_results
+    except Exception as e:
+        print(f"\nWarning: Cost analysis failed: {e}")
+        cost_results = None
 
+    ###### STEP 7: GENERATE VISUALIZATIONS ######
     figs = None
     if showVisualizations or saveVisualizations:
-        figs = VA.build_all_key_figures(
-            summary,
-            policy_results=policyResults,
-            options=comparisonOptions,
-            source_note=visualizationSourceNote
-        )
-        summary["figure_names"] = list(figs.keys())
+        try:
+            figs = VA.build_all_key_figures(
+                summary,
+                policy_results=policyResults,
+                options=comparisonOptions,
+                source_note=visualizationSourceNote
+            )
+            summary["figure_names"] = list(figs.keys())
 
-        renderVisualizationFigures(
-            figs,
-            showFigures=showVisualizations,
-            saveFigures=saveVisualizations
-        )
+            renderVisualizationFigures(
+                figs,
+                showFigures=showVisualizations,
+                saveFigures=saveVisualizations
+            )
+        except Exception as e:
+            print(f"\nWarning: Visualization generation failed: {e}")
 
+    ###### STEP 8: PRINT RECOMMENDATIONS ######
     if printRecommendations:
         printRecommendationReport(summary)
-        printCostRecommendations(cost_results)
+        if cost_results:
+            printCostRecommendations(cost_results)
 
     return timePeriod, summary
 
 def Start():
-
-    print("Starting...")
+    """
+    Main entry point - sets up parameters using widgets and runs simulation.
+    """
+    print("Starting simulation...")
 
     # create Params instance
     p = Params()
 
-    # set random seed
+    # set random seed for reproducibility
     random.seed(30)
 
     # call Widgets to set Params using GUI
     p.setParams()
-      
+    
+    print("\nParameters set. Ready to run simulation.")
+    print("Call RunSimulation(p) to execute, or comparePriorityRules(p) to compare policies.")
+    
+    return p
+
+# For non-interactive use in Colab
+def RunWithDefaults(priorityRule='historical', saveOutputs=True, printStats=True, 
+                    printRecommendations=True, showVisualizations=False):
+    """
+    Run simulation with default parameters without widget interaction.
+    Useful for Google Colab when widgets don't work properly.
+    
+    Args:
+        priorityRule: One of PRIORITY_OPTIONS
+        saveOutputs: Whether to save CSV outputs
+        printStats: Whether to print detailed statistics
+        printRecommendations: Whether to print recommendation report
+        showVisualizations: Whether to display visualizations
+    """
+    print("Running simulation with default parameters...")
+    
+    # Create Params and set defaults programmatically
+    p = Params()
+    
+    # Set random seed
+    random.seed(30)
+    
+    # Apply priority rule
+    applyPriorityRule(p, priorityRule)
+    
+    # Run simulation
+    timePeriod, summary = RunSimulation(
+        p,
+        saveOutputs=saveOutputs,
+        printStats=printStats,
+        printRecommendations=printRecommendations,
+        showVisualizations=showVisualizations
+    )
+    
+    return timePeriod, summary, p
+
+
+# Example usage for Colab:
+if __name__ == "__main__":
+    print("\n" + "="*60)
+    print("EP/CATH LAB SIMULATION")
+    print("="*60)
+    print("\nUsage:")
+    print("  1. With widgets (interactive): p = Start()")
+    print("  2. Without widgets (programmatic): timePeriod, summary, p = RunWithDefaults()")
+    print("  3. Compare policies: results = comparePriorityRules(p)")
+    print("\n" + "="*60 + "\n")
