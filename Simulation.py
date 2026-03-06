@@ -779,6 +779,64 @@ def RunSimulation(
         ###### STEP 7: PRINT COST ANALYSIS ######
         printCostAnalysis(timePeriod, myP)
     
+  
+    ###### STEP 9: GENERATE VISUALIZATIONS (OPTIONAL) ######
+    if hasattr(myP, 'generateVisualizations') and myP.generateVisualizations:
+        try:
+            import VisualizationAnalysis as VA
+            import matplotlib.pyplot as plt
+            import os
+            
+            # Build comprehensive summary
+            from Simulation import buildScenarioSummary, buildCostInputsFromSimulation
+            from CostAnalysis import (
+                HoldingBayCostParams,
+                CloseTimeCostParams,
+                summarize_hb_decision,
+                summarize_close_time_decision,
+            )
+            
+            summary = buildScenarioSummary(timePeriod, procedures, myP, priorityName="historical")
+            
+            # Add cost analysis
+            overcap_rows, empty_rows, close_rows = buildCostInputsFromSimulation(timePeriod, myP)
+            hb_params = HoldingBayCostParams(simulated_days=timePeriod.numDays)
+            close_params = CloseTimeCostParams()
+            
+            hb_results = summarize_hb_decision(overcap_rows, empty_rows, params=hb_params)
+            close_results = summarize_close_time_decision(close_rows, params=close_params)
+            
+            summary["cost_analysis"] = {
+                "hb": hb_results,
+                "close": close_results
+            }
+            
+            # Generate all visualizations
+            print("\n" + "="*70)
+            print("GENERATING VISUALIZATIONS...")
+            print("="*70)
+            
+            figures = VA.build_all_key_figures(
+                summary,
+                policy_results=None,
+                options=None,
+                source_note="Source: EP/CATH simulation based on July 2015 data"
+            )
+            
+            # Save figures
+            output_dir = "OutputData/Figures"
+            os.makedirs(output_dir, exist_ok=True)
+            
+            for name, fig in figures.items():
+                filepath = os.path.join(output_dir, f"{name}.png")
+                fig.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='#F7F5F2')
+                plt.close(fig)
+            
+            print(f"✓ Saved {len(figures)} visualizations to {output_dir}/")
+            print("="*70 + "\n")
+            
+        except Exception as e:
+            print(f"\nNote: Visualization generation skipped: {e}")
     ###### STEP 8: RETURN RESULTS ######
     return timePeriod, procedures
         
