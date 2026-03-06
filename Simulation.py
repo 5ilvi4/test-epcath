@@ -21,6 +21,13 @@ from DataProcessor import *
 from Params import *
 from TimePeriod import *
 
+from CostAnalysis import (
+    HoldingBayCostParams,
+    CloseTimeCostParams,
+    summarize_hb_decision,
+    summarize_close_time_decision,
+)
+
 
 #set directory
 #os.chdir("/home/matrix/")
@@ -619,6 +626,98 @@ def comparePriorityRules(baseParams, priorities=None, saveResults=False):
         "ranked": ranked
     }
 
+def buildCostInputsFromCaseTables():
+    """
+    Temporary helper using your case/exhibit values.
+    Replace or extend later with automatically generated tables.
+    """
+    overcap_rows = [
+        {"hb_count": 11, "days_with_instances": 196, "avg_instances_per_day": 14.42},
+        {"hb_count": 12, "days_with_instances": 160, "avg_instances_per_day": 8.97},
+        {"hb_count": 13, "days_with_instances": 126, "avg_instances_per_day": 5.40},
+        {"hb_count": 14, "days_with_instances": 96,  "avg_instances_per_day": 3.02},
+        {"hb_count": 15, "days_with_instances": 59,  "avg_instances_per_day": 1.49},
+        {"hb_count": 16, "days_with_instances": 34,  "avg_instances_per_day": 0.78},
+        {"hb_count": 17, "days_with_instances": 20,  "avg_instances_per_day": 0.34},
+        {"hb_count": 18, "days_with_instances": 9,   "avg_instances_per_day": 0.12},
+        {"hb_count": 19, "days_with_instances": 3,   "avg_instances_per_day": 0.05},
+        {"hb_count": 20, "days_with_instances": 1,   "avg_instances_per_day": 0.00},
+        {"hb_count": 21, "days_with_instances": 0,   "avg_instances_per_day": 0.00},
+    ]
+
+    empty_rows = [
+        {"hb_count": 11, "avg_daily_empty_hour_blocks": 3.17},
+        {"hb_count": 12, "avg_daily_empty_hour_blocks": 4.02},
+        {"hb_count": 13, "avg_daily_empty_hour_blocks": 4.95},
+        {"hb_count": 14, "avg_daily_empty_hour_blocks": 5.92},
+        {"hb_count": 15, "avg_daily_empty_hour_blocks": 6.92},
+        {"hb_count": 16, "avg_daily_empty_hour_blocks": 7.94},
+        {"hb_count": 17, "avg_daily_empty_hour_blocks": 8.96},
+        {"hb_count": 18, "avg_daily_empty_hour_blocks": 10.00},
+        {"hb_count": 19, "avg_daily_empty_hour_blocks": 11.04},
+        {"hb_count": 20, "avg_daily_empty_hour_blocks": 12.08},
+        {"hb_count": 21, "avg_daily_empty_hour_blocks": 13.12},
+    ]
+
+    close_rows = [
+        {"close_time": "17:30", "avg_occupancy": 6.05, "p95_occupancy": 11.56},
+        {"close_time": "18:00", "avg_occupancy": 5.81, "p95_occupancy": 11.10},
+        {"close_time": "18:30", "avg_occupancy": 4.66, "p95_occupancy": 9.38},
+        {"close_time": "19:00", "avg_occupancy": 4.43, "p95_occupancy": 9.13},
+        {"close_time": "19:30", "avg_occupancy": 3.42, "p95_occupancy": 7.73},
+        {"close_time": "20:00", "avg_occupancy": 3.20, "p95_occupancy": 7.32},
+        {"close_time": "20:30", "avg_occupancy": 2.40, "p95_occupancy": 5.93},
+        {"close_time": "21:00", "avg_occupancy": 2.29, "p95_occupancy": 5.74},
+        {"close_time": "21:30", "avg_occupancy": 1.88, "p95_occupancy": 5.09},
+        {"close_time": "22:00", "avg_occupancy": 1.78, "p95_occupancy": 4.98},
+        {"close_time": "22:30", "avg_occupancy": 1.43, "p95_occupancy": 4.11},
+        {"close_time": "23:00", "avg_occupancy": 1.40, "p95_occupancy": 4.06},
+        {"close_time": "23:30", "avg_occupancy": 1.16, "p95_occupancy": 3.66},
+        {"close_time": "24:00", "avg_occupancy": 1.04, "p95_occupancy": 3.33},
+    ]
+
+    return overcap_rows, empty_rows, close_rows
+
+def runCostAnalysis():
+    """
+    Run economic decision support using case-table inputs.
+    """
+    hb_params = HoldingBayCostParams()
+    close_params = CloseTimeCostParams()
+
+    overcap_rows, empty_rows, close_rows = buildCostInputsFromCaseTables()
+
+    hb_results = summarize_hb_decision(
+        overcap_rows,
+        empty_rows,
+        params=hb_params
+    )
+
+    close_results = summarize_close_time_decision(
+        close_rows,
+        params=close_params
+    )
+
+    return {
+        "hb": hb_results,
+        "close": close_results
+    }
+
+def printCostRecommendations(cost_results):
+    hb_service = cost_results["hb"]["service_constraint_recommendation"]
+    hb_cost = cost_results["hb"]["cost_recommendation"]
+    close_cost = cost_results["close"]["cost_recommendation"]
+
+    print("\n*********COST-BASED DECISION SUPPORT*********")
+    print("Holding bays meeting service constraint (<=10% days with overcapacity): " + str(int(hb_service["hb_count"])))
+    print("Holding bays minimizing total holding-bay cost: " + str(int(hb_cost["hb_count"])))
+    print("Minimum holding-bay total cost: $" + str(round(hb_cost["total_holding_bay_cost"], 2)))
+
+    print("Best holding-bay close time by total cost: " + str(close_cost["close_time_hhmm"]))
+    print("Estimated labor cost at best close time: $" + str(round(close_cost["estimated_labor_cost"], 2)))
+    print("Estimated admission cost at best close time: $" + str(round(close_cost["admission_cost"], 2)))
+    print("Estimated total cost at best close time: $" + str(round(close_cost["total_cost"], 2)))
+
 
 def RunSimulation(myP, saveOutputs=True, printStats=True, printRecommendations=True):
 
@@ -665,8 +764,12 @@ def RunSimulation(myP, saveOutputs=True, printStats=True, printRecommendations=T
 
     summary = buildScenarioSummary(timePeriod, procedures, myP, priorityName=priorityName)
 
+    cost_results = runCostAnalysis()
+    summary["cost_analysis"] = cost_results
+
     if printRecommendations:
-        printRecommendationReport(summary)
+    printRecommendationReport(summary)
+    printCostRecommendations(cost_results)
 
     return timePeriod, summary
     
