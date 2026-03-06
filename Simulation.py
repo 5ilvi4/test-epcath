@@ -1130,6 +1130,9 @@ def printCostAnalysis(timePeriod, p):
         print(f"Error: {e}")
     except Exception as e:
         print(f"\nWarning: Cost analysis failed: {e}")
+        import traceback
+        traceback.print_exc()
+        
 def Start():
     """
     Main entry point - sets up parameters using widgets and runs simulation.
