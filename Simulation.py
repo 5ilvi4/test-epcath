@@ -793,30 +793,30 @@ def RunSimulation(
 
    summary = buildScenarioSummary(timePeriod, procedures, myP, priorityName=priorityName)
 
-cost_results = runCostAnalysis()
-summary["cost_analysis"] = cost_results
+    cost_results = runCostAnalysis()
+    summary["cost_analysis"] = cost_results
 
-figs = None
-if showVisualizations or saveVisualizations:
-    figs = VA.build_all_key_figures(
-        summary,
-        policy_results=policyResults,
-        options=comparisonOptions,
-        source_note=visualizationSourceNote
-    )
-    summary["figure_names"] = list(figs.keys())
+    figs = None
+    if showVisualizations or saveVisualizations:
+        figs = VA.build_all_key_figures(
+            summary,
+            policy_results=policyResults,
+            options=comparisonOptions,
+            source_note=visualizationSourceNote
+        )
+        summary["figure_names"] = list(figs.keys())
 
-    renderVisualizationFigures(
-        figs,
-        showFigures=showVisualizations,
-        saveFigures=saveVisualizations
-    )
+        renderVisualizationFigures(
+            figs,
+            showFigures=showVisualizations,
+            saveFigures=saveVisualizations
+        )
 
-if printRecommendations:
-    printRecommendationReport(summary)
-    printCostRecommendations(cost_results)
+    if printRecommendations:
+        printRecommendationReport(summary)
+        printCostRecommendations(cost_results)
 
-return timePeriod, summary
+    return timePeriod, summary
 
 def buildRecommendationOption(
     summary,
