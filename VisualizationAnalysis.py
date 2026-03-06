@@ -126,6 +126,17 @@ def _short_option_label(label: str) -> str:
         out = out.replace(old, new)
     return out
 
+
+def _display_name(row):
+    """
+    Clean labels for presentation charts.
+    """
+    if row.get("is_existing_plan", False):
+        return "Existing plan"
+    if row.get("is_recommended", False):
+        return "Recommended"
+    return "Historical redesign"
+
 # -----------------------------------------------------------------------------
 # Policy comparison plots (from comparePriorityRules)
 # -----------------------------------------------------------------------------
