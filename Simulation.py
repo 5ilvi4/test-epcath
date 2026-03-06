@@ -768,8 +768,8 @@ def RunSimulation(myP, saveOutputs=True, printStats=True, printRecommendations=T
     summary["cost_analysis"] = cost_results
 
     if printRecommendations:
-    printRecommendationReport(summary)
-    printCostRecommendations(cost_results)
+        printRecommendationReport(summary)
+        printCostRecommendations(cost_results)
 
     return timePeriod, summary
     
