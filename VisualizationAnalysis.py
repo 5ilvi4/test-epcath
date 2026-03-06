@@ -525,10 +525,7 @@ def add_existing_plan_option(options, *, hb_count=21, close_time="24:00", priori
         )
     """
     if option_name is None:
-        option_name = f"Existing plan
-{priority_rule}
-{hb_count} bays
-{close_time}"
+        option_name = f"Existing plan\\n{priority_rule}\\n{hb_count} bays\\n{close_time}"
 
     row = {
         "option_name": option_name,
