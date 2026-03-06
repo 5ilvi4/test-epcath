@@ -13,6 +13,9 @@ import copy
 from types import SimpleNamespace
 
 import pandas
+import matplotlib.pyplot as plt
+
+from IPython.display import display
 
 from Schedule import *
 from ShiftSchedule import *
@@ -27,6 +30,8 @@ from CostAnalysis import (
     summarize_hb_decision,
     summarize_close_time_decision,
 )
+
+import VisualizationAnalysis as VA
 
 
 #set directory
@@ -719,7 +724,31 @@ def printCostRecommendations(cost_results):
     print("Estimated total cost at best close time: $" + str(round(close_cost["total_cost"], 2)))
 
 
-def RunSimulation(myP, saveOutputs=True, printStats=True, printRecommendations=True):
+def renderVisualizationFigures(figs, showFigures=True, saveFigures=False, outDir="OutputData/Figures"):
+    """
+    Display and/or save matplotlib figures returned by VisualizationAnalysis.
+    """
+    if saveFigures and not os.path.exists(outDir):
+        os.makedirs(outDir)
+
+    for name, fig in figs.items():
+        if saveFigures:
+            fig.savefig(os.path.join(outDir, f"{name}.png"), dpi=200, bbox_inches="tight")
+        if showFigures:
+            display(fig)
+        plt.close(fig)
+
+def RunSimulation(
+    myP,
+    saveOutputs=True,
+    printStats=True,
+    printRecommendations=True,
+    showVisualizations=False,
+    saveVisualizations=False,
+    policyResults=None,
+    comparisonOptions=None,
+    visualizationSourceNote="Source: EP/CATH simulation based on July 2015 case inputs; authors’ analysis."
+):
 
     ###### STEP 0: READ DATA / CREATE MODEL ######
 
@@ -762,16 +791,33 @@ def RunSimulation(myP, saveOutputs=True, printStats=True, printRecommendations=T
     except Exception:
         pass
 
-    summary = buildScenarioSummary(timePeriod, procedures, myP, priorityName=priorityName)
+   summary = buildScenarioSummary(timePeriod, procedures, myP, priorityName=priorityName)
 
-    cost_results = runCostAnalysis()
-    summary["cost_analysis"] = cost_results
+cost_results = runCostAnalysis()
+summary["cost_analysis"] = cost_results
 
-    if printRecommendations:
-        printRecommendationReport(summary)
-        printCostRecommendations(cost_results)
+figs = None
+if showVisualizations or saveVisualizations:
+    figs = VA.build_all_key_figures(
+        summary,
+        policy_results=policyResults,
+        options=comparisonOptions,
+        source_note=visualizationSourceNote
+    )
+    summary["figure_names"] = list(figs.keys())
 
-    return timePeriod, summary
+    renderVisualizationFigures(
+        figs,
+        showFigures=showVisualizations,
+        saveFigures=saveVisualizations
+    )
+
+if printRecommendations:
+    printRecommendationReport(summary)
+    printCostRecommendations(cost_results)
+
+return timePeriod, summary
+
 def buildRecommendationOption(
     summary,
     optionName,
