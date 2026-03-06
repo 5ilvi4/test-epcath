@@ -278,8 +278,7 @@ def printSchedule(day,lab,room):
         daysShifts = shifts[day].rooms[(lab,room)]
         print("Day's Shifts: "+str(daysShifts))
     s = rooms[(day,lab,room)]
-    times = s.timeSlots.keys()
-    times.sort(key=lambda x:(x[0],x[1]))
+    times = sorted(s.timeSlots.keys(), key=lambda x:(x[0],x[1]))
     seen = set()
     for t in times:
         if t[1]%30 == 0:
@@ -773,72 +772,6 @@ def RunSimulation(
     if saveOutputs:
         saveHoldingBayResults(timePeriod, myP.holdingBayWorkbook, myP)
         formatDataFileForVisualization(myP.resolution, myP.holdingBayWorkbook)
-        ###### STEP 6: PRINT RECOMMENDATIONS ######
-        printPlanningRecommendations(timePeriod, myP)
-    
-        ###### STEP 7: PRINT COST ANALYSIS ######
-        printCostAnalysis(timePeriod, myP)
-    
-  
-    ###### STEP 9: GENERATE VISUALIZATIONS (OPTIONAL) ######
-    if hasattr(myP, 'generateVisualizations') and myP.generateVisualizations:
-        try:
-            import VisualizationAnalysis as VA
-            import matplotlib.pyplot as plt
-            import os
-            
-            # Build comprehensive summary
-            from Simulation import buildScenarioSummary, buildCostInputsFromSimulation
-            from CostAnalysis import (
-                HoldingBayCostParams,
-                CloseTimeCostParams,
-                summarize_hb_decision,
-                summarize_close_time_decision,
-            )
-            
-            summary = buildScenarioSummary(timePeriod, procedures, myP, priorityName="historical")
-            
-            # Add cost analysis
-            overcap_rows, empty_rows, close_rows = buildCostInputsFromSimulation(timePeriod, myP)
-            hb_params = HoldingBayCostParams(simulated_days=timePeriod.numDays)
-            close_params = CloseTimeCostParams()
-            
-            hb_results = summarize_hb_decision(overcap_rows, empty_rows, params=hb_params)
-            close_results = summarize_close_time_decision(close_rows, params=close_params)
-            
-            summary["cost_analysis"] = {
-                "hb": hb_results,
-                "close": close_results
-            }
-            
-            # Generate all visualizations
-            print("\n" + "="*70)
-            print("GENERATING VISUALIZATIONS...")
-            print("="*70)
-            
-            figures = VA.build_all_key_figures(
-                summary,
-                policy_results=None,
-                options=None,
-                source_note="Source: EP/CATH simulation based on July 2015 data"
-            )
-            
-            # Save figures
-            output_dir = "OutputData/Figures"
-            os.makedirs(output_dir, exist_ok=True)
-            
-            for name, fig in figures.items():
-                filepath = os.path.join(output_dir, f"{name}.png")
-                fig.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='#F7F5F2')
-                plt.close(fig)
-            
-            print(f"✓ Saved {len(figures)} visualizations to {output_dir}/")
-            print("="*70 + "\n")
-            
-        except Exception as e:
-            print(f"\nNote: Visualization generation skipped: {e}")
-    ###### STEP 8: RETURN RESULTS ######
-    return timePeriod, procedures
         
 
     ###### STEP 5: BUILD SUMMARY ######
@@ -895,17 +828,6 @@ def RunSimulation(
 
     return timePeriod, summary
 
-
-import math
-
-def percentile(values, pct):
-    """Calculate percentile of a list of values."""
-    if len(values) == 0:
-        return 0
-    vals = sorted(values)
-    rank = int(math.ceil((pct / 100.0) * len(vals))) - 1
-    rank = max(0, min(rank, len(vals) - 1))
-    return vals[rank]
 
 def hoursToClockTime(hoursFloat):
     """Convert hours from midnight to clock time (handles >24 hours)"""
@@ -1082,9 +1004,15 @@ def printCostAnalysis(timePeriod, p):
         print("="*70)
         
         print("\n--- HOLDING BAY CAPACITY ANALYSIS ---")
-        service_rec = hb_results["service_constraint_recommendation"]
-        cost_rec = hb_results["cost_recommendation"]
-        
+        # Get the full rows from the cost table
+        cost_table = hb_results["cost_table"]
+        service_rec_series = hb_results["service_constraint_recommendation"]
+        cost_rec_series = hb_results["cost_recommendation"]
+
+        # Find matching rows in cost table
+        service_rec = cost_table[cost_table['hb_count'] == service_rec_series['hb_count']].iloc[0]
+        cost_rec = cost_table[cost_table['hb_count'] == cost_rec_series['hb_count']].iloc[0]
+
         print(f"Service-constrained recommendation: {int(service_rec['hb_count'])} bays")
         print(f"  (Meets ≤5% days with overcapacity constraint)")
         print(f"  Total daily cost: ${service_rec['total_holding_bay_cost']:.2f}")
