@@ -104,13 +104,10 @@ def _build_option_label(row, policy_col="priority_rule", hb_col="hb_count", clos
         parts.append(str(int(row[hb_col])) + " bays")
     if close_col in row and pd.notna(row[close_col]):
         parts.append("close " + str(row[close_col]))
-    return "
-".join(parts) if len(parts) > 0 else "option"
-
+    return "\n".join(parts) if len(parts) > 0 else "option"
 
 
 def _short_option_label(label: str) -> str:
-    """Compact labels for slides and charts."""
     if label is None:
         return "option"
     label = str(label)
@@ -128,7 +125,6 @@ def _short_option_label(label: str) -> str:
     for old, new in replacements.items():
         out = out.replace(old, new)
     return out
-
 
 # -----------------------------------------------------------------------------
 # Policy comparison plots (from comparePriorityRules)
