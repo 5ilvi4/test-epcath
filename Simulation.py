@@ -772,7 +772,6 @@ def RunSimulation(myP, saveOutputs=True, printStats=True, printRecommendations=T
         printCostRecommendations(cost_results)
 
     return timePeriod, summary
-
 def buildRecommendationOption(
     summary,
     optionName,
