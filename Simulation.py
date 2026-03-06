@@ -619,9 +619,8 @@ def comparePriorityRules(baseParams, priorities=None, saveResults=False):
         "ranked": ranked
     }
 
-def RunSimulation(myP):
 
-    def RunSimulation(myP, saveOutputs=True, printStats=True, printRecommendations=True):
+def RunSimulation(myP, saveOutputs=True, printStats=True, printRecommendations=True):
 
     ###### STEP 0: READ DATA / CREATE MODEL ######
 
