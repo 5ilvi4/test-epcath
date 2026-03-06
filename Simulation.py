@@ -773,6 +773,15 @@ def RunSimulation(
     if saveOutputs:
         saveHoldingBayResults(timePeriod, myP.holdingBayWorkbook, myP)
         formatDataFileForVisualization(myP.resolution, myP.holdingBayWorkbook)
+        ###### STEP 6: PRINT RECOMMENDATIONS ######
+        printPlanningRecommendations(timePeriod, myP)
+    
+        ###### STEP 7: PRINT COST ANALYSIS ######
+        printCostAnalysis(timePeriod, myP)
+    
+    ###### STEP 8: RETURN RESULTS ######
+    return timePeriod, procedures
+        
 
     ###### STEP 5: BUILD SUMMARY ######
     priorityName = "custom"
@@ -828,6 +837,241 @@ def RunSimulation(
 
     return timePeriod, summary
 
+
+import math
+
+def percentile(values, pct):
+    """Calculate percentile of a list of values."""
+    if len(values) == 0:
+        return 0
+    vals = sorted(values)
+    rank = int(math.ceil((pct / 100.0) * len(vals))) - 1
+    rank = max(0, min(rank, len(vals) - 1))
+    return vals[rank]
+
+def hoursToClockTime(hoursFloat):
+    """Convert hours from midnight to clock time (handles >24 hours)"""
+    totalMinutes = int(round(hoursFloat * 60))
+    days = totalMinutes // (24 * 60)
+    remainingMinutes = totalMinutes % (24 * 60)
+    hh = remainingMinutes // 60
+    mm = remainingMinutes % 60
+    
+    if days > 0:
+        return f"{hh}:{mm:02d} (+{days} day{'s' if days > 1 else ''})"
+    else:
+        return f"{hh}:{mm:02d}"
+
+def printPlanningRecommendations(timePeriod, p):
+    """Print planning recommendations based on simulation results."""
+    
+    holdingBays = timePeriod.bins[2]
+    numSlots = int(p.HBCloseTime * (60.0 / p.resolution))
+    
+    dailyPeaks = []
+    dailyLastOccupiedHours = []
+    
+    for d in range(timePeriod.numDays):
+        occ = [holdingBays[(d, float(i))] for i in range(numSlots)]
+        peak = max(occ) if len(occ) > 0 else 0
+        dailyPeaks.append(peak)
+        
+        occupiedIdx = [i for i, x in enumerate(occ) if x > 0]
+        if len(occupiedIdx) == 0:
+            dailyLastOccupiedHours.append(0.0)
+        else:
+            lastIdx = occupiedIdx[-1]
+            lastHour = (lastIdx * p.resolution) / 60.0
+            dailyLastOccupiedHours.append(lastHour)
+    
+    overallPeak = max(dailyPeaks) if len(dailyPeaks) > 0 else 0
+    peakP95 = percentile(dailyPeaks, 95)
+    peakP90 = percentile(dailyPeaks, 90)
+    lastOccP95 = percentile(dailyLastOccupiedHours, 95)
+    lastOccP90 = percentile(dailyLastOccupiedHours, 90)
+    overallLast = max(dailyLastOccupiedHours) if len(dailyLastOccupiedHours) > 0 else 0.0
+    
+    recommendedBays = int(math.ceil(peakP95))
+    recommendedClose = hoursToClockTime(lastOccP95)
+    
+    cathUtil, epUtil, _, _, _ = timePeriod.getUtilizationStatistics(p)
+    meanUtil = (cathUtil + epUtil) / 2.0
+    
+    print("\n" + "="*70)
+    print("*********PLANNING RECOMMENDATIONS*********")
+    print("="*70)
+    
+    print("\n--- HOLDING BAY RECOMMENDATIONS ---")
+    print(f"Recommended holding bays (95th percentile daily peak): {recommendedBays} bays")
+    print(f"Conservative (90th percentile): {int(math.ceil(peakP90))} bays")
+    print(f"Worst-case peak observed: {overallPeak} bays")
+    print(f"\nInterpretation: Build {recommendedBays} holding bay spaces to handle")
+    print(f"95% of days without overcapacity.")
+    
+    print("\n--- HOLDING BAY OPERATING HOURS ---")
+    print(f"Holding bays last occupied (95th percentile): {recommendedClose}")
+    print(f"Conservative (90th percentile): {hoursToClockTime(lastOccP90)}")
+    print(f"Worst-case last occupied: {hoursToClockTime(overallLast)}")
+    print(f"\nInterpretation: Holding bays need to remain open past midnight.")
+    print(f"On 95% of days, last patient leaves by {recommendedClose}.")
+    
+    print("\n--- LAB ROOM UTILIZATION ---")
+    print(f"Cath lab average utilization: {round(cathUtil * 100, 2)}%")
+    print(f"EP lab average utilization: {round(epUtil * 100, 2)}%")
+    print(f"Overall average utilization: {round(meanUtil * 100, 2)}%")
+    
+    print("\n--- PROCEDURE SCHEDULING PERFORMANCE ---")
+    print(f"Total procedures scheduled: {timePeriod.procsPlaced} / {timePeriod.numTotalProcs}")
+    print(f"Procedures extending past room close time: {timePeriod.overflowCath + timePeriod.overflowEP}")
+    print(f"  • Cath lab overflow: {timePeriod.overflowCath}")
+    print(f"  • EP lab overflow: {timePeriod.overflowEP}")
+    
+    print("\n" + "="*70)
+    print("KEY RECOMMENDATIONS:")
+    print("="*70)
+    print(f"1. BUILD: {recommendedBays} holding bay spaces")
+    print(f"2. STAFF: Holding bays until {recommendedClose} (95% coverage)")
+    print(f"3. UTILIZATION: Labs running at {round(meanUtil * 100, 1)}% capacity")
+    print("="*70 + "\n")
+
+def buildCostInputsFromSimulation(timePeriod, p):
+    """Generate cost analysis input tables from simulation results."""
+    holdingBays = timePeriod.bins[2]
+    numSlots = int(p.HBCloseTime * (60.0 / p.resolution))
+    
+    overcap_rows = []
+    empty_rows = []
+    
+    dailyPeaks = []
+    for d in range(timePeriod.numDays):
+        occ = [holdingBays[(d, float(i))] for i in range(numSlots)]
+        dailyPeaks.append(max(occ) if len(occ) > 0 else 0)
+    
+    current_p95 = int(math.ceil(percentile(dailyPeaks, 95)))
+    min_bays = max(current_p95 - 5, 1)
+    max_bays = current_p95 + 6
+    
+    for bay_count in range(min_bays, max_bays):
+        days_over = sum(1 for peak in dailyPeaks if peak > bay_count)
+        total_instances = sum(max(0, peak - bay_count) for peak in dailyPeaks)
+        avg_instances = total_instances / timePeriod.numDays
+        pct_days = days_over / timePeriod.numDays
+        
+        overcap_rows.append({
+            "hb_count": bay_count,
+            "days_with_instances": days_over,
+            "pct_days_with_instances": pct_days,
+            "avg_instances_per_day": avg_instances
+        })
+        
+        total_empty_hours = 0
+        for d in range(timePeriod.numDays):
+            occ = [holdingBays[(d, float(i))] for i in range(numSlots)]
+            for occupancy in occ:
+                empty = max(0, bay_count - occupancy)
+                total_empty_hours += empty * (p.resolution / 60.0)
+        
+        avg_empty_hours = total_empty_hours / timePeriod.numDays
+        
+        empty_rows.append({
+            "hb_count": bay_count,
+            "avg_daily_empty_hour_blocks": avg_empty_hours
+        })
+    
+    close_rows = []
+    for close_hour in range(17, 25):
+        close_slot = int(close_hour * (60.0 / p.resolution))
+        
+        occupancy_after = []
+        for d in range(timePeriod.numDays):
+            occ = [holdingBays[(d, float(i))] for i in range(numSlots)]
+            if close_slot < len(occ):
+                after = occ[close_slot:]
+                avg_after = sum(after) / len(after) if after else 0
+                occupancy_after.append(avg_after)
+        
+        avg_occ = sum(occupancy_after) / len(occupancy_after) if occupancy_after else 0
+        p95_occ = percentile(occupancy_after, 95) if occupancy_after else 0
+        
+        close_rows.append({
+            "close_time": f"{close_hour % 24}:00",
+            "avg_occupancy": avg_occ,
+            "p95_occupancy": p95_occ
+        })
+    
+    return overcap_rows, empty_rows, close_rows
+
+def printCostAnalysis(timePeriod, p):
+    """Run and print cost-based decision analysis."""
+    try:
+        from CostAnalysis import (
+            HoldingBayCostParams,
+            CloseTimeCostParams,
+            summarize_hb_decision,
+            summarize_close_time_decision,
+        )
+        
+        overcap_rows, empty_rows, close_rows = buildCostInputsFromSimulation(timePeriod, p)
+        
+        hb_params = HoldingBayCostParams(simulated_days=timePeriod.numDays)
+        close_params = CloseTimeCostParams()
+        
+        hb_results = summarize_hb_decision(overcap_rows, empty_rows, params=hb_params)
+        close_results = summarize_close_time_decision(close_rows, params=close_params)
+        
+        print("\n" + "="*70)
+        print("*********COST-BASED DECISION SUPPORT*********")
+        print("="*70)
+        
+        print("\n--- HOLDING BAY CAPACITY ANALYSIS ---")
+        service_rec = hb_results["service_constraint_recommendation"]
+        cost_rec = hb_results["cost_recommendation"]
+        
+        print(f"Service-constrained recommendation: {int(service_rec['hb_count'])} bays")
+        print(f"  (Meets ≤5% days with overcapacity constraint)")
+        print(f"  Total daily cost: ${service_rec['total_holding_bay_cost']:.2f}")
+        
+        print(f"\nCost-minimizing recommendation: {int(cost_rec['hb_count'])} bays")
+        print(f"  Total daily cost: ${cost_rec['total_holding_bay_cost']:.2f}")
+        print(f"  Days with overcapacity: {int(cost_rec['days_with_instances'])} ({cost_rec['pct_days_with_instances']*100:.1f}%)")
+        
+        print("\nCost breakdown (cost-minimizing option):")
+        print(f"  • Cancellation costs: ${cost_rec['cancellation_cost']:.2f}/day")
+        print(f"  • Empty bay costs: ${cost_rec['empty_holding_bay_cost']:.2f}/day")
+        
+        print("\n--- HOLDING BAY OPERATING HOURS ANALYSIS ---")
+        close_rec = close_results["cost_recommendation"]
+        
+        print(f"Cost-minimizing close time: {close_rec['close_time_hhmm']}")
+        print(f"  Incremental hours beyond 17:00: {close_rec['incremental_hours']:.1f} hours/day")
+        print(f"  Total incremental cost: ${close_rec['total_cost']:.2f}/day")
+        
+        print("\nCost breakdown:")
+        print(f"  • Labor cost (base + overtime): ${close_rec['estimated_labor_cost']:.2f}/day")
+        print(f"  • Admission cost: ${close_rec['admission_cost']:.2f}/day")
+        print(f"  • Patients admitted at close (95th percentile): {close_rec['admitted_patients_95']:.1f}")
+        
+        print("\n" + "="*70)
+        print("RECOMMENDED DECISION:")
+        print("="*70)
+        
+        if service_rec['hb_count'] == cost_rec['hb_count']:
+            print(f"Build {int(cost_rec['hb_count'])} holding bays")
+            print("  (Both service and cost objectives align)")
+        else:
+            print(f"Build {int(service_rec['hb_count'])} holding bays")
+            cost_diff = service_rec['total_holding_bay_cost'] - cost_rec['total_holding_bay_cost']
+            print(f"  (Service constraint prioritized; costs ${cost_diff:.2f}/day more than minimum)")
+        
+        print(f"\nOperate holding bays until {close_rec['close_time_hhmm']}")
+        print(f"  (Minimizes total cost of labor + admissions)")
+        print("="*70 + "\n")
+        
+    except ImportError as e:
+        print("\nNote: Cost analysis module not available.")
+        print(f"Error: {e}")
+    except Exception as e:
+        print(f"\nWarning: Cost analysis failed: {e}")
 def Start():
     """
     Main entry point - sets up parameters using widgets and runs simulation.
