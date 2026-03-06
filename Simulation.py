@@ -791,7 +791,7 @@ def RunSimulation(
     except Exception:
         pass
 
-   summary = buildScenarioSummary(timePeriod, procedures, myP, priorityName=priorityName)
+    summary = buildScenarioSummary(timePeriod, procedures, myP, priorityName=priorityName)
 
     cost_results = runCostAnalysis()
     summary["cost_analysis"] = cost_results
@@ -818,100 +818,6 @@ def RunSimulation(
 
     return timePeriod, summary
 
-def buildRecommendationOption(
-    summary,
-    optionName,
-    hbCount=None,
-    closeTime=None,
-    isExistingPlan=False,
-    isRecommended=False
-):
-    """
-    Convert one simulation summary into a standardized option record
-    for visual comparison.
-    """
-    hb_cost_table = summary["cost_analysis"]["hb"]["cost_table"]
-    close_cost_table = summary["cost_analysis"]["close"]["cost_table"]
-
-    total_hb_cost = None
-    days_with_instances = None
-    if hbCount is not None and "hb_count" in hb_cost_table.columns:
-        hb_match = hb_cost_table[hb_cost_table["hb_count"] == hbCount]
-        if len(hb_match) > 0:
-            total_hb_cost = float(hb_match.iloc[0]["total_holding_bay_cost"])
-            if "days_with_instances" in hb_match.columns:
-                days_with_instances = float(hb_match.iloc[0]["days_with_instances"])
-
-    total_close_cost = None
-    admitted_patients_95 = None
-    if closeTime is not None:
-        close_col = "close_time_hhmm" if "close_time_hhmm" in close_cost_table.columns else "close_time"
-        close_match = close_cost_table[close_cost_table[close_col] == closeTime]
-        if len(close_match) > 0:
-            total_close_cost = float(close_match.iloc[0]["total_cost"])
-            if "admitted_patients_95" in close_match.columns:
-                admitted_patients_95 = float(close_match.iloc[0]["admitted_patients_95"])
-
-    total_cost = None
-    if total_hb_cost is not None and total_close_cost is not None:
-        total_cost = total_hb_cost + total_close_cost
-
-    return {
-        "option_name": optionName,
-        "priority_rule": summary["priority_rule"],
-        "hb_count": hbCount,
-        "close_time": closeTime,
-        "overflow_total": summary["overflow_total"],
-        "mean_room_utilization": summary["mean_room_utilization"],
-        "cath_utilization_avg": summary["cath_utilization_avg"],
-        "ep_utilization_avg": summary["ep_utilization_avg"],
-        "recommended_bays_p95": summary["holding_bay"]["recommended_bays_p95"],
-        "recommended_close_p95": summary["holding_bay"]["recommended_close_p95"],
-        "total_holding_bay_cost": total_hb_cost,
-        "total_close_cost": total_close_cost,
-        "total_cost": total_cost,
-        "days_with_instances": days_with_instances,
-        "admitted_patients_95": admitted_patients_95,
-        "is_existing_plan": isExistingPlan,
-        "is_recommended": isRecommended,
-    }
-
-
-def compareRecommendationOptions(optionList):
-    """
-    Sort recommendation options by:
-    1. lower total cost
-    2. lower overflow
-    3. higher utilization
-    """
-    options = list(optionList)
-
-    def sort_key(x):
-        total_cost = x["total_cost"] if x["total_cost"] is not None else float("inf")
-        overflow = x["overflow_total"] if x["overflow_total"] is not None else float("inf")
-        util = x["mean_room_utilization"] if x["mean_room_utilization"] is not None else -1
-        return (total_cost, overflow, -util)
-
-    ranked = sorted(options, key=sort_key)
-
-    print("\n============================================================")
-    print("COMPARISON OF RECOMMENDATION OPTIONS")
-    print("============================================================")
-    for r in ranked:
-        print(
-            "{0}: total_cost={1}, overflow={2}, util={3:.4f}, bays={4}, close={5}".format(
-                r["option_name"].replace("\n", " | "),
-                "NA" if r["total_cost"] is None else round(r["total_cost"], 2),
-                r["overflow_total"],
-                r["mean_room_utilization"],
-                r["hb_count"],
-                r["close_time"],
-            )
-        )
-
-    print("\nBest tested option: " + ranked[0]["option_name"].replace("\n", " | "))
-    return {"best": ranked[0], "ranked": ranked}
-    
 def Start():
 
     print("Starting...")
