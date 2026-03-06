@@ -30,6 +30,28 @@ All functions return matplotlib Figure objects.
 import matplotlib.pyplot as plt
 import pandas as pd
 
+# Presentation palette
+PRIMARY = "#2F5D62"      # deep teal
+SECONDARY = "#5E8B7E"    # muted green
+ACCENT = "#D9A441"       # muted gold
+BENCHMARK = "#A7B6C2"    # soft slate
+ALTERNATIVE = "#7FA7A6"  # light teal
+GRID = "#D9DEE3"
+TEXT = "#2B2B2B"
+
+
+def _style_axes(ax, grid_axis="x"):
+    ax.grid(axis=grid_axis, alpha=0.6, color=GRID)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color("#B9C2CA")
+    ax.spines["bottom"].set_color("#B9C2CA")
+    ax.tick_params(colors=TEXT)
+    ax.title.set_color(TEXT)
+    ax.xaxis.label.set_color(TEXT)
+    ax.yaxis.label.set_color(TEXT)
+
 
 # -----------------------------------------------------------------------------
 # Internal helpers
@@ -79,7 +101,30 @@ def _build_option_label(row, policy_col="priority_rule", hb_col="hb_count", clos
         parts.append(str(int(row[hb_col])) + " bays")
     if close_col in row and pd.notna(row[close_col]):
         parts.append("close " + str(row[close_col]))
-    return "\n".join(parts) if len(parts) > 0 else "option"
+    return "
+".join(parts) if len(parts) > 0 else "option"
+
+
+
+def _short_option_label(label: str) -> str:
+    """Compact labels for slides and charts."""
+    if label is None:
+        return "option"
+    label = str(label)
+    replacements = {
+        "longest recovery time first": "Longest recovery",
+        "shortest recovery time first": "Shortest recovery",
+        "longest procedures first": "Longest procedure",
+        "shortest procedures first": "Shortest procedure",
+        "historical": "Historical",
+        "Existing plan": "Existing",
+        "Recommended": "Recommended",
+        "close ": "",
+    }
+    out = label
+    for old, new in replacements.items():
+        out = out.replace(old, new)
+    return out
 
 
 # -----------------------------------------------------------------------------
@@ -332,24 +377,29 @@ def options_to_df(options):
 
 
 def plot_option_total_cost(options):
-    df = options_to_df(options).sort_values("total_cost")
-    fig, ax = plt.subplots(figsize=(10, 5))
+    df = options_to_df(options).copy()
+    df["label_short"] = df["option_name"].apply(_short_option_label)
+    df = df.sort_values("total_cost", ascending=True)
 
     colors = []
     for _, row in df.iterrows():
         if row["is_recommended"]:
-            colors.append("tab:green")
+            colors.append(SECONDARY)
         elif row["is_existing_plan"]:
-            colors.append("tab:orange")
+            colors.append(BENCHMARK)
         else:
-            colors.append("tab:blue")
+            colors.append(ALTERNATIVE)
 
-    ax.bar(df["option_name"], df["total_cost"], color=colors)
-    ax.set_title("Total cost by recommendation option")
-    ax.set_xlabel("Recommendation option")
-    ax.set_ylabel("Total cost")
-    ax.tick_params(axis="x", rotation=0)
-    _annotate_bar_values(ax, decimals=1)
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.barh(df["label_short"], df["total_cost"], color=colors)
+    ax.set_title("Total annual cost by option")
+    ax.set_xlabel("Estimated total cost")
+    ax.set_ylabel("")
+    _style_axes(ax, grid_axis="x")
+
+    for i, v in enumerate(df["total_cost"]):
+        ax.text(v, i, f"  ${v:,.0f}", va="center", fontsize=9)
+
     fig.tight_layout()
     return fig
 
@@ -377,22 +427,28 @@ def plot_option_overflow(options):
     df = options_to_df(options).copy()
     if "overflow_total" not in df.columns:
         raise ValueError("Each option must include 'overflow_total'.")
+    df["label_short"] = df["option_name"].apply(_short_option_label)
+    df = df.sort_values("overflow_total", ascending=True)
 
     colors = []
     for _, row in df.iterrows():
         if row["is_recommended"]:
-            colors.append("tab:green")
+            colors.append(SECONDARY)
         elif row["is_existing_plan"]:
-            colors.append("tab:orange")
+            colors.append(BENCHMARK)
         else:
-            colors.append("tab:blue")
+            colors.append(ALTERNATIVE)
 
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.bar(df["option_name"], df["overflow_total"], color=colors)
-    ax.set_title("Late-running procedures by recommendation option")
-    ax.set_xlabel("Recommendation option")
-    ax.set_ylabel("Procedures scheduled past room closing")
-    _annotate_bar_values(ax, decimals=0)
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.barh(df["label_short"], df["overflow_total"], color=colors)
+    ax.set_title("Late-running procedures by option")
+    ax.set_xlabel("Procedures scheduled past room closing")
+    ax.set_ylabel("")
+    _style_axes(ax, grid_axis="x")
+
+    for i, v in enumerate(df["overflow_total"]):
+        ax.text(v, i, f"  {int(v)}", va="center", fontsize=9)
+
     fig.tight_layout()
     return fig
 
@@ -402,6 +458,7 @@ def plot_option_tradeoff_scatter(options, x_col="overflow_total", y_col="total_c
     df = options_to_df(options).copy()
     if x_col not in df.columns or y_col not in df.columns:
         raise ValueError(f"Options must include '{x_col}' and '{y_col}'.")
+    df["label_short"] = df[label_col].apply(_short_option_label)
 
     fig, ax = plt.subplots(figsize=(8, 6))
 
@@ -410,19 +467,23 @@ def plot_option_tradeoff_scatter(options, x_col="overflow_total", y_col="total_c
     recommended = df[df["is_recommended"]]
 
     if len(base) > 0:
-        ax.scatter(base[x_col], base[y_col], label="Alternative options")
+        ax.scatter(base[x_col], base[y_col], label="Alternative", color=ALTERNATIVE, s=70)
     if len(existing) > 0:
-        ax.scatter(existing[x_col], existing[y_col], label="Existing plan", marker="s", s=90)
+        ax.scatter(existing[x_col], existing[y_col], label="Existing plan", color=BENCHMARK, marker="s", s=110)
     if len(recommended) > 0:
-        ax.scatter(recommended[x_col], recommended[y_col], label="Recommended option", marker="*", s=180)
+        ax.scatter(recommended[x_col], recommended[y_col], label="Recommended", color=SECONDARY, marker="*", s=260)
 
     for _, row in df.iterrows():
-        ax.annotate(row[label_col], (row[x_col], row[y_col]), textcoords="offset points", xytext=(5, 5), fontsize=9)
+        ax.annotate(row["label_short"], (row[x_col], row[y_col]), textcoords="offset points", xytext=(6, 6), fontsize=9)
 
-    ax.set_title(f"Tradeoff: {y_col.replace('_', ' ')} vs {x_col.replace('_', ' ')}")
-    ax.set_xlabel(x_col.replace("_", " "))
-    ax.set_ylabel(y_col.replace("_", " "))
-    ax.legend()
+    ax.set_title("Cost vs late-running procedures")
+    ax.set_xlabel("Procedures scheduled past room closing")
+    ax.set_ylabel("Estimated total cost")
+    ax.grid(alpha=0.25)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(frameon=False)
     fig.tight_layout()
     return fig
 
@@ -430,67 +491,52 @@ def plot_option_tradeoff_scatter(options, x_col="overflow_total", y_col="total_c
 
 def plot_option_scorecard(options):
     """
-    Normalized scorecard for candidate recommendation packages.
-    Higher is better.
-
-    Uses these if present:
-    - lower overflow_total is better
-    - lower total_cost is better
-    - lower days_with_instances is better
-    - higher mean_room_utilization is better
+    Clearer comparison vs the existing plan.
+    Shows percentage improvement where possible.
+    Positive values are better than the existing plan.
     """
     df = options_to_df(options).copy()
+    if df["is_existing_plan"].sum() != 1:
+        raise ValueError("plot_option_scorecard expects exactly one existing-plan benchmark.")
 
-    def best_when_low(series):
-        if series.max() == series.min():
-            return pd.Series([1.0] * len(series), index=series.index)
-        return (series.max() - series) / (series.max() - series.min())
+    base = df[df["is_existing_plan"]].iloc[0]
+    others = df[~df["is_existing_plan"]].copy()
+    others["label_short"] = others["option_name"].apply(_short_option_label)
 
-    def best_when_high(series):
-        if series.max() == series.min():
-            return pd.Series([1.0] * len(series), index=series.index)
-        return (series - series.min()) / (series.max() - series.min())
+    rows = []
+    for _, row in others.iterrows():
+        record = {"label_short": row["label_short"]}
+        if pd.notna(row.get("overflow_total")) and pd.notna(base.get("overflow_total")) and base["overflow_total"] != 0:
+            record["Overflow reduction %"] = 100.0 * (base["overflow_total"] - row["overflow_total"]) / base["overflow_total"]
+        if pd.notna(row.get("total_cost")) and pd.notna(base.get("total_cost")) and base["total_cost"] != 0:
+            record["Cost reduction %"] = 100.0 * (base["total_cost"] - row["total_cost"]) / base["total_cost"]
+        if pd.notna(row.get("mean_room_utilization")) and pd.notna(base.get("mean_room_utilization")) and base["mean_room_utilization"] != 0:
+            record["Utilization change %"] = 100.0 * (row["mean_room_utilization"] - base["mean_room_utilization"]) / base["mean_room_utilization"]
+        if pd.notna(row.get("days_with_instances")) and pd.notna(base.get("days_with_instances")) and base["days_with_instances"] != 0:
+            record["Overcapacity-day reduction %"] = 100.0 * (base["days_with_instances"] - row["days_with_instances"]) / base["days_with_instances"]
+        rows.append(record)
 
-    metrics = []
-    labels = []
-
-    if "overflow_total" in df.columns:
-        df["score_overflow"] = best_when_low(df["overflow_total"])
-        metrics.append("score_overflow")
-        labels.append("Overflow")
-
-    if "total_cost" in df.columns:
-        df["score_total_cost"] = best_when_low(df["total_cost"])
-        metrics.append("score_total_cost")
-        labels.append("Total cost")
-
-    if "days_with_instances" in df.columns:
-        df["score_service"] = best_when_low(df["days_with_instances"])
-        metrics.append("score_service")
-        labels.append("Service")
-
-    if "mean_room_utilization" in df.columns:
-        df["score_utilization"] = best_when_high(df["mean_room_utilization"])
-        metrics.append("score_utilization")
-        labels.append("Utilization")
-
+    comp = pd.DataFrame(rows).fillna(0.0)
+    metrics = [c for c in comp.columns if c != "label_short"]
     if len(metrics) == 0:
-        raise ValueError("No recognized metrics found in options for scorecard.")
+        raise ValueError("No comparable metrics found for scorecard.")
 
-    x = range(len(df))
+    x = range(len(comp))
     width = 0.8 / len(metrics)
     fig, ax = plt.subplots(figsize=(11, 5))
 
+    palette = [PRIMARY, ACCENT, SECONDARY, BENCHMARK]
     for i, metric in enumerate(metrics):
         offset = (i - (len(metrics) - 1) / 2.0) * width
-        ax.bar([j + offset for j in x], df[metric], width=width, label=labels[i])
+        ax.bar([j + offset for j in x], comp[metric], width=width, label=metric, color=palette[i % len(palette)])
 
+    ax.axhline(0, color="#7A8793", linewidth=1)
     ax.set_xticks(list(x))
-    ax.set_xticklabels(df["option_name"], rotation=0)
-    ax.set_ylim(0, 1.05)
-    ax.set_ylabel("Normalized score (higher is better)")
-    ax.set_title("Recommendation option scorecard")
-    ax.legend()
+    ax.set_xticklabels(comp["label_short"])
+    ax.set_ylabel("Improvement vs existing plan (%)")
+    ax.set_title("Improvement relative to existing plan")
+    ax.legend(frameon=False, fontsize=9)
+    _style_axes(ax, grid_axis="y")
     fig.tight_layout()
     return fig
 
@@ -525,7 +571,10 @@ def add_existing_plan_option(options, *, hb_count=21, close_time="24:00", priori
         )
     """
     if option_name is None:
-        option_name = f"Existing plan\\n{priority_rule}\\n{hb_count} bays\\n{close_time}"
+        option_name = f"Existing plan
+{priority_rule}
+{hb_count} bays
+{close_time}"
 
     row = {
         "option_name": option_name,
