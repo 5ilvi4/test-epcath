@@ -25,7 +25,7 @@ import pandas as pd
 @dataclass(frozen=True)
 class HoldingBayCostParams:
     simulated_days: int = 260
-    overcapacity_day_threshold: float = 0.10
+    overcapacity_day_threshold: float = 0.05
     contribution_margin_per_cancelled_procedure: float = 600.0
     empty_holding_bay_cost_per_hour: float = 10.0
     overcapacity_block_minutes: int = 5
