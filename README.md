@@ -1,6 +1,6 @@
 # test-epcath
 
-What the Simulation Does
+# What the Simulation Does
 This is a Discrete Event Simulation (DES) of a hospital's joint EP (Electrophysiology) and Cath (Catheterization) lab. The goal is to figure out:
 
 How many holding bay spaces to build
@@ -60,7 +60,7 @@ Overflow	If a shift ends and a procedure isn't done, it's counted as overflow (t
 now do the same for CostAnalysis
 I already read CostAnalysis.py earlier, so here's the full breakdown:
 
-What CostAnalysis Does
+# What CostAnalysis Does
 It answers two specific planning questions using economics:
 
 How many holding bay spaces should we build?
@@ -144,3 +144,71 @@ $10/hr	Empty bay holding cost	Penalizes too many bays
 $48/hr	Base nurse wage	Close time labor cost
 1.5×	Overtime multiplier	Late-hour staffing premium
 $230	Admission cost per patient	Penalizes closing too early
+
+# What does EP_Cath_Python_Viz_Does
+
+EP_CATH_Python_Code_Viz.ipynb — Cell by Cell
+Cell 0 — Colab Badge (markdown)
+Just a clickable button that opens the notebook directly in Google Colab. No code.
+
+Cell 1 — Title (markdown)
+Instructions — tells users to do Runtime → Restart and Run All to start fresh.
+
+Cell 2 — Old clone (ignore this)
+
+!git clone https://github.com/empracine/test-epcath.git
+This is a leftover cell from the original author's repo. It will always fail with "already exists" because cell 4 is the one that actually does the proper setup. You can delete this cell.
+
+Cell 3 — Old startup (ignore this)
+
+Simulation.Start()
+This runs the widget-based parameter setup. It's also a leftover — cell 5 and 6 replace this workflow entirely. You can delete this cell too.
+
+Cell 4 — Fresh clone from YOUR repo
+
+%cd /content
+!rm -rf /content/test-epcath
+!git clone https://github.com/5ilvi4/test-epcath.git
+Deletes any old copy of the repo
+Clones the latest version from your GitHub
+This ensures you always have the most up-to-date code
+Cell 5 — Load and reload modules
+
+import Simulation, Params, VisualizationAnalysis as VA
+importlib.reload(Simulation)
+importlib.reload(Params)
+importlib.reload(VA)
+Adds the repo folder to Python's path
+Imports the three main modules
+Force-reloads them — this prevents the stale cache problem we ran into earlier
+Cell 6 — Run the simulation with visualizations
+
+p = Params.Params()
+Simulation.applyPriorityRule(p, "longest recovery time first")
+policy_results = Simulation.comparePriorityRules(p, saveResults=False)
+
+options = None
+
+timePeriod, summary = Simulation.RunSimulation(
+    p,
+    showVisualizations=True,
+    policyResults=policy_results,
+    comparisonOptions=options
+)
+This is the main cell. Step by step:
+
+Params.Params() — creates default simulation parameters
+applyPriorityRule(..., "longest recovery time first") — sets the scheduling rule: patients with the longest recovery time are scheduled first (the policy that reduces overflow the most)
+comparePriorityRules(p) — runs the simulation 5 times, once per priority rule, to compare them all
+RunSimulation(p, showVisualizations=True) — runs the full simulation with your chosen parameters and generates all the charts
+options=None means no custom scenario comparison is active. If you wanted to compare e.g. "existing plan vs redesign," you'd define a list of scenario dicts here.
+
+Cell 7 — Download instructions (markdown)
+Reminds you to download HBDataMelt.csv from the Files panel if you need the raw holding bay data for further analysis.
+
+The intended workflow
+
+Cell 4 → get latest code from GitHub
+Cell 5 → load it into Python cleanly
+Cell 6 → run simulation + see charts
+Cells 2 and 3 are dead weight from the original notebook and can be deleted.
