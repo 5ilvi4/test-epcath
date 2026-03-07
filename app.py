@@ -536,7 +536,6 @@ with tab_charts:
             for name, fig in figs.items():
                 st.subheader(name.replace("_", " ").title())
                 st.pyplot(fig)
-                plt.close(fig)
         except Exception as e:
             st.error(f"Chart generation failed: {e}")
             import traceback
