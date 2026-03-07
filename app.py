@@ -456,6 +456,147 @@ def plot_policy_summary_table(policy_results):
     return pd.DataFrame(rows)
 
 
+def _norm(vals, higher_is_better=True):
+    """Min-max normalise a list to [0,1]; invert if lower is better."""
+    lo, hi = min(vals), max(vals)
+    if hi == lo:
+        return [0.5] * len(vals)
+    normed = [(v - lo) / (hi - lo) for v in vals]
+    return normed if higher_is_better else [1 - n for n in normed]
+
+
+def plot_policy_radar(policy_results):
+    """Radar/spider chart: 5 policies × 5 normalised KPIs."""
+    labels = [r["priority_rule"] for r in policy_results]
+
+    # Raw values per metric (each column = one policy)
+    raw = {
+        "Cath\nUtil":    [r["cath_utilization_avg"] * 100 for r in policy_results],
+        "EP\nUtil":      [r["ep_utilization_avg"] * 100 for r in policy_results],
+        "Low\nOverflow": [r["overflow_total"] for r in policy_results],   # lower better
+        "Low HB\nPeak":  [r["holding_bay"]["peak_bays_p95"] for r in policy_results],  # lower better
+        "Early\nClose":  [r["holding_bay"]["last_occupied_p95_hours"] for r in policy_results],  # lower better
+    }
+    higher = {"Cath\nUtil": True, "EP\nUtil": True,
+              "Low\nOverflow": False, "Low HB\nPeak": False, "Early\nClose": False}
+
+    categories = list(raw.keys())
+    N = len(categories)
+    angles = [n / N * 2 * np.pi for n in range(N)]
+    angles += angles[:1]   # close the polygon
+
+    POLICY_COLORS = ["#3B6EA5", "#C0392B", "#6B7A8F", "#27AE60", "#E67E22"]
+
+    fig = plt.figure(figsize=(7, 7), facecolor=BG)
+    ax = fig.add_subplot(111, polar=True)
+    ax.set_facecolor(BG)
+
+    for idx, (label, color) in enumerate(zip(labels, POLICY_COLORS)):
+        scores = [_norm(raw[cat], higher_is_better=higher[cat])[idx] for cat in categories]
+        scores += scores[:1]
+        ax.plot(angles, scores, color=color, linewidth=2, label=label)
+        ax.fill(angles, scores, color=color, alpha=0.12)
+
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(categories, fontsize=9, color="#333333")
+    ax.set_yticks([0.25, 0.5, 0.75, 1.0])
+    ax.set_yticklabels(["25%", "50%", "75%", "Best"], fontsize=7, color="#888888")
+    ax.set_ylim(0, 1)
+    ax.spines["polar"].set_color("#CFCFCF")
+    ax.grid(color=GRID, linewidth=0.7)
+    ax.set_title("Policy comparison — normalised KPIs\n(outer edge = best on each metric)",
+                 fontsize=11, fontweight="bold", pad=20)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.35, 1.1),
+              frameon=False, fontsize=8)
+    fig.tight_layout()
+    return fig
+
+
+def plot_policy_heatmap(policy_results):
+    """Color-coded heatmap: policies × KPIs, green = better, red = worse."""
+    labels = [r["priority_rule"] for r in policy_results]
+
+    metrics_cfg = [
+        ("Cath util (%)",    [r["cath_utilization_avg"] * 100 for r in policy_results],  True,  "{:.1f}"),
+        ("EP util (%)",      [r["ep_utilization_avg"] * 100 for r in policy_results],    True,  "{:.1f}"),
+        ("Mean util (%)",    [r["mean_room_utilization"] * 100 for r in policy_results], True,  "{:.1f}"),
+        ("Overflow",         [r["overflow_total"] for r in policy_results],              False, "{:.0f}"),
+        ("HB peak P95",      [r["holding_bay"]["peak_bays_p95"] for r in policy_results],False, "{:.1f}"),
+        ("Close hr P95",     [r["holding_bay"]["last_occupied_p95_hours"] for r in policy_results], False, "{:.2f}"),
+    ]
+
+    n_policies = len(labels)
+    n_metrics  = len(metrics_cfg)
+
+    # Build normalised score matrix (rows = policies, cols = metrics)
+    score_matrix = np.zeros((n_policies, n_metrics))
+    cell_text    = [[""] * n_metrics for _ in range(n_policies)]
+
+    for col, (_, vals, hib, fmt) in enumerate(metrics_cfg):
+        normed = _norm(vals, higher_is_better=hib)
+        for row in range(n_policies):
+            score_matrix[row, col] = normed[row]
+            cell_text[row][col] = fmt.format(vals[row])
+
+    fig, ax = plt.subplots(figsize=(10, max(3, n_policies * 0.7 + 1.5)), facecolor=BG)
+    im = ax.imshow(score_matrix, cmap="RdYlGn", vmin=0, vmax=1, aspect="auto")
+
+    ax.set_xticks(range(n_metrics))
+    ax.set_xticklabels([m[0] for m in metrics_cfg], fontsize=9)
+    ax.set_yticks(range(n_policies))
+    ax.set_yticklabels(labels, fontsize=9)
+    ax.tick_params(length=0)
+
+    for row in range(n_policies):
+        for col in range(n_metrics):
+            brightness = score_matrix[row, col]
+            txt_color = "white" if brightness < 0.35 or brightness > 0.75 else "#333333"
+            ax.text(col, row, cell_text[row][col],
+                    ha="center", va="center", fontsize=9, color=txt_color, fontweight="bold")
+
+    ax.set_title("Performance heatmap — green = better on each metric",
+                 fontsize=11, fontweight="bold", loc="left")
+    fig.tight_layout()
+    return fig
+
+
+def plot_policy_composite_score(policy_results):
+    """Horizontal bar: composite score = average normalised rank across all KPIs."""
+    labels = [r["priority_rule"] for r in policy_results]
+
+    raw = {
+        "Cath util":    ([r["cath_utilization_avg"] * 100 for r in policy_results], True),
+        "EP util":      ([r["ep_utilization_avg"] * 100 for r in policy_results],   True),
+        "Low overflow": ([r["overflow_total"] for r in policy_results],              False),
+        "Low HB peak":  ([r["holding_bay"]["peak_bays_p95"] for r in policy_results], False),
+        "Early close":  ([r["holding_bay"]["last_occupied_p95_hours"] for r in policy_results], False),
+    }
+
+    composite = np.zeros(len(labels))
+    for vals, hib in raw.values():
+        composite += np.array(_norm(vals, higher_is_better=hib))
+    composite /= len(raw)   # average normalised score (0=worst, 1=best)
+
+    # sort best → worst
+    order = np.argsort(composite)[::-1]
+    sorted_labels = [labels[i] for i in order]
+    sorted_scores = composite[order]
+    colors = [C1 if i == 0 else C3 for i in range(len(order))]
+
+    fig, ax = plt.subplots(figsize=(8, max(3, len(labels) * 0.6 + 1)), facecolor=BG)
+    bars = ax.barh(sorted_labels[::-1], sorted_scores[::-1], color=colors[::-1],
+                   height=0.55, alpha=0.9)
+    ax.bar_label(bars, fmt="%.2f", padding=4, fontsize=9)
+    ax.set_xlim(0, 1.15)
+    ax.set_title("Composite performance score (avg normalised rank across 5 KPIs)\n"
+                 "Higher = better overall — blue bar is the top-ranked policy",
+                 fontsize=11, fontweight="bold", loc="left")
+    ax.set_xlabel("Score (0 = worst, 1 = best)")
+    _style(ax, "x")
+    fig.tight_layout()
+    return fig
+
+
 # ── helpers ───────────────────────────────────────────────────────────────────
 def make_params(scenario_key, priority_rule, hb_clean_time, num_cath_rooms, resolution):
     p = Params()
@@ -809,30 +950,63 @@ with tab_policy:
             "that best balances room utilization, patient delays (overflow), and holding bay demand."
         )
 
-        # ── summary table ─────────────────────────────────────────────────
-        st.subheader("Policy Comparison Summary")
-        policy_df = plot_policy_summary_table(policy_results)
         best_rule = policy_results[0]["priority_rule"]   # ranked #1 by comparePriorityRules
-        st.caption(
-            f"Policies ranked by: fewest overflow → lowest HB P95 peak → earliest close time → "
-            f"highest utilization. **Top-ranked rule: {best_rule}**"
+
+        # ── at-a-glance winner callout ─────────────────────────────────────
+        st.success(
+            f"**Top-ranked policy: {best_rule}** — ranked by fewest overflow → lowest HB peak "
+            f"→ earliest close time → highest utilization."
         )
+
+        # ── visual 1: composite score ──────────────────────────────────────
+        st.subheader("Overall Ranking — Composite Score")
+        st.caption(
+            "Each metric is normalised 0–1 (best = 1, worst = 0). The composite score is the "
+            "average across all five KPIs: room utilization (×2), overflow, HB peak, close time. "
+            "The blue bar is the recommended policy."
+        )
+        _show_fig(plot_policy_composite_score(policy_results))
+
+        st.divider()
+
+        # ── visual 2: radar chart ──────────────────────────────────────────
+        st.subheader("Multi-Metric Radar Chart")
+        st.caption(
+            "Each axis is one KPI, normalised so the outer edge always means 'best on that metric'. "
+            "A policy whose polygon covers the most area performs well across all dimensions simultaneously."
+        )
+        _show_fig(plot_policy_radar(policy_results))
+
+        st.divider()
+
+        # ── visual 3: heatmap ──────────────────────────────────────────────
+        st.subheader("Performance Heatmap")
+        st.caption(
+            "Green = better, red = worse on each column. Scan each row to see a policy's "
+            "strengths and weaknesses; scan each column to compare policies on one metric."
+        )
+        _show_fig(plot_policy_heatmap(policy_results))
+
+        st.divider()
+
+        # ── summary table ─────────────────────────────────────────────────
+        st.subheader("Summary Table")
+        policy_df = plot_policy_summary_table(policy_results)
         st.dataframe(policy_df, width='stretch', hide_index=True)
 
         st.divider()
 
-        # ── utilization comparison ─────────────────────────────────────────
-        st.subheader("1. Room Utilization by Policy")
+        # ── metric breakdowns ──────────────────────────────────────────────
+        st.subheader("Metric Breakdowns")
+
+        st.markdown("**Room Utilization by Policy**")
         st.caption(
             "Higher utilization means the procedure rooms are being used more productively. "
             "The hospital's goal is sufficient utilization to support hiring an additional EP provider."
         )
         _show_fig(plot_policy_utilization(policy_results))
 
-        st.divider()
-
-        # ── overflow comparison ────────────────────────────────────────────
-        st.subheader("2. Procedure Delays (Overflow) by Policy")
+        st.markdown("**Procedure Delays (Overflow) by Policy**")
         st.caption(
             "Overflow counts procedures scheduled past the room's closing time — a direct proxy "
             "for care delays. Fewer overflow procedures means less patient waiting and better "
@@ -840,21 +1014,17 @@ with tab_policy:
         )
         _show_fig(plot_policy_overflow(policy_results))
 
-        st.divider()
-
-        # ── HB & close-time comparison ─────────────────────────────────────
-        st.subheader("3. Holding Bay Requirements & Close Time by Policy")
+        st.markdown("**Holding Bay Requirements & Close Time by Policy**")
         st.caption(
-            "The recommended HB count (P95 peak) and recommended close time vary by policy because "
-            "different scheduling orders change when patients arrive in recovery. A policy that "
-            "requires fewer bays or an earlier close time may reduce capital and staffing costs."
+            "Different scheduling orders change when patients arrive in recovery. A policy that "
+            "requires fewer bays or an earlier close time reduces capital and staffing costs."
         )
         _show_fig(plot_policy_hb_and_close(policy_results))
 
         st.divider()
 
         # ── current run detail ─────────────────────────────────────────────
-        st.subheader("4. Selected Policy Detail")
+        st.subheader("Selected Policy Detail")
         st.caption(f"Results for the currently selected policy: **{summary['priority_rule']}**")
         d1, d2, d3, d4, d5 = st.columns(5)
         d1.metric("Cath utilization",    f"{round(summary['cath_utilization_avg']*100,1)}%")
