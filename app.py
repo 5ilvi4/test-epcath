@@ -306,6 +306,156 @@ def plot_cost_curve(cost_table):
     fig.tight_layout()
     return fig
 
+# ── comparison & sensitivity chart functions ──────────────────────────────────
+
+def plot_hb_peak_distribution(summary):
+    """Histogram of daily peak holding-bay occupancy with P90/P95 markers."""
+    peaks = summary["holding_bay"]["daily_peak_bays"]
+    hb = summary["holding_bay"]
+    fig, ax = plt.subplots(figsize=(8, 4), facecolor=BG)
+    ax.hist(peaks, bins=range(0, max(peaks) + 2), color=C1, edgecolor="white",
+            alpha=0.85, linewidth=0.5)
+    ax.axvline(hb["peak_bays_p90"], color=C3, linestyle="--", linewidth=1.2,
+               label=f"P90 = {hb['peak_bays_p90']:.1f} bays")
+    ax.axvline(hb["peak_bays_p95"], color=C2, linestyle="--", linewidth=1.5,
+               label=f"P95 = {hb['peak_bays_p95']:.1f} bays (recommended: {hb['recommended_bays_p95']})")
+    ax.set_title("Daily peak holding-bay occupancy distribution",
+                 fontsize=11, fontweight="bold", loc="left")
+    ax.set_xlabel("Peak bays occupied that day")
+    ax.set_ylabel("Number of days")
+    ax.legend(frameon=False, fontsize=9)
+    _style(ax, "y")
+    fig.tight_layout()
+    return fig
+
+
+def plot_close_time_sensitivity(summary):
+    """Dual-axis: days with HB demand after close + avg bay-hours after close."""
+    rows = summary["close_time_eval"]
+    labels  = [r["close_time"] for r in rows]
+    days    = [r["days_with_any_demand_after_close"] for r in rows]
+    bh_avg  = [r["average_bay_hours_after_close_per_day"] for r in rows]
+
+    fig, ax1 = plt.subplots(figsize=(9, 4), facecolor=BG)
+    fig.patch.set_facecolor(BG)
+    ax2 = ax1.twinx()
+
+    ax1.bar(labels, days, color=C1, alpha=0.7, width=0.4, label="Days with demand after close")
+    ax2.plot(labels, bh_avg, color=C2, linewidth=2, marker="o", markersize=5,
+             label="Avg bay-hours/day after close")
+
+    ax1.set_title("Impact of holding-bay close time on residual demand",
+                  fontsize=11, fontweight="bold", loc="left")
+    ax1.set_xlabel("Close time")
+    ax1.set_ylabel("Days with demand after close", color=C1)
+    ax2.set_ylabel("Avg bay-hours remaining / day", color=C2)
+    ax1.tick_params(axis="y", labelcolor=C1, length=0, labelsize=9)
+    ax2.tick_params(axis="y", labelcolor=C2, length=0, labelsize=9)
+    ax1.tick_params(axis="x", length=0, labelsize=9)
+    ax1.set_facecolor(BG)
+    ax1.grid(axis="y", color=GRID, linewidth=0.7)
+    ax1.set_axisbelow(True)
+    ax1.spines[["top", "right"]].set_visible(False)
+    ax2.spines[["top", "left"]].set_visible(False)
+
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, frameon=False, fontsize=8, loc="upper right")
+    fig.tight_layout()
+    return fig
+
+
+def plot_policy_utilization(policy_results):
+    """Grouped bar: Cath and EP room utilization per scheduling policy."""
+    labels = [r["priority_rule"] for r in policy_results]
+    cath_u = [r["cath_utilization_avg"] * 100 for r in policy_results]
+    ep_u   = [r["ep_utilization_avg"] * 100 for r in policy_results]
+    x = range(len(labels))
+    w = 0.35
+
+    fig, ax = plt.subplots(figsize=(9, 4), facecolor=BG)
+    bars1 = ax.bar([i - w/2 for i in x], cath_u, w, color=C1, alpha=0.85, label="Cath")
+    bars2 = ax.bar([i + w/2 for i in x], ep_u,   w, color=C2, alpha=0.85, label="EP")
+    ax.bar_label(bars1, fmt="%.1f%%", padding=3, fontsize=8)
+    ax.bar_label(bars2, fmt="%.1f%%", padding=3, fontsize=8)
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(labels, rotation=15, ha="right", fontsize=9)
+    ax.set_title("Room utilization by scheduling policy", fontsize=11, fontweight="bold", loc="left")
+    ax.set_ylabel("Utilization (%)")
+    ax.legend(frameon=False, fontsize=9)
+    _style(ax, "y")
+    fig.tight_layout()
+    return fig
+
+
+def plot_policy_overflow(policy_results):
+    """Grouped bar: overflow procedures per scheduling policy by lab."""
+    labels  = [r["priority_rule"] for r in policy_results]
+    ov_cath = [r.get("overflow_cath", 0) for r in policy_results]
+    ov_ep   = [r.get("overflow_ep", 0) for r in policy_results]
+    ov_flex = [r.get("overflow_middle", 0) for r in policy_results]
+    x = range(len(labels))
+
+    fig, ax = plt.subplots(figsize=(9, 4), facecolor=BG)
+    b1 = ax.bar(x, ov_cath, color=C1, alpha=0.85, label="Cath overflow")
+    b2 = ax.bar(x, ov_ep,   bottom=ov_cath, color=C2, alpha=0.85, label="EP overflow")
+    bot3 = [a + b for a, b in zip(ov_cath, ov_ep)]
+    b3 = ax.bar(x, ov_flex, bottom=bot3, color=C3, alpha=0.85, label="Flex room overflow")
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(labels, rotation=15, ha="right", fontsize=9)
+    ax.set_title("Procedures scheduled past room closing time (overflow) by policy",
+                 fontsize=11, fontweight="bold", loc="left")
+    ax.set_ylabel("Overflow procedures")
+    ax.legend(frameon=False, fontsize=9)
+    _style(ax, "y")
+    fig.tight_layout()
+    return fig
+
+
+def plot_policy_hb_and_close(policy_results):
+    """Side-by-side: recommended HB count and close time P95 per policy."""
+    labels   = [r["priority_rule"] for r in policy_results]
+    hb_rec   = [r["holding_bay"]["recommended_bays_p95"] for r in policy_results]
+    close_h  = [r["holding_bay"]["last_occupied_p95_hours"] for r in policy_results]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4), facecolor=BG)
+    fig.patch.set_facecolor(BG)
+
+    bars1 = ax1.barh(labels, hb_rec, color=C1, alpha=0.85, height=0.5)
+    ax1.bar_label(bars1, fmt="%d bays", padding=4, fontsize=9)
+    ax1.set_title("Recommended HB count (P95 peak)", fontsize=10, fontweight="bold", loc="left")
+    ax1.set_xlabel("Holding bays")
+    _style(ax1, "x")
+
+    bars2 = ax2.barh(labels, close_h, color=C2, alpha=0.85, height=0.5)
+    ax2.bar_label(bars2, fmt="%.2f hrs", padding=4, fontsize=9)
+    ax2.set_title("Recommended close time (P95 last occupied)", fontsize=10, fontweight="bold", loc="left")
+    ax2.set_xlabel("Hours (24h clock)")
+    _style(ax2, "x")
+
+    fig.tight_layout()
+    return fig
+
+
+def plot_policy_summary_table(policy_results):
+    """Return a DataFrame summarising all policies — for st.dataframe."""
+    rows = []
+    for r in policy_results:
+        hb = r["holding_bay"]
+        rows.append({
+            "Priority rule":        r["priority_rule"],
+            "Cath util (%)":        round(r["cath_utilization_avg"] * 100, 1),
+            "EP util (%)":          round(r["ep_utilization_avg"] * 100, 1),
+            "Mean util (%)":        round(r["mean_room_utilization"] * 100, 1),
+            "Procs placed":         r["procs_placed"],
+            "Overflow (total)":     r["overflow_total"],
+            "Recommended HB bays":  hb["recommended_bays_p95"],
+            "HB peak P95":          round(hb["peak_bays_p95"], 1),
+            "Rec. close time":      hb["recommended_close_p95"],
+        })
+    return pd.DataFrame(rows)
+
+
 # ── helpers ───────────────────────────────────────────────────────────────────
 def make_params(scenario_key, priority_rule, hb_clean_time, num_cath_rooms, resolution):
     p = Params()
@@ -355,8 +505,8 @@ proc_df  = load_proc_data(proc_file)
 shift_df = load_shift_data(shift_file)
 cost_table_baseline = get_baseline_cost_table()
 
-tabs = ["Data Overview", "Summary", "Charts", "Cost Analysis"]
-tab_eda, tab_summary, tab_charts, tab_cost = st.tabs(tabs)
+tabs = ["Data Overview", "Summary", "Charts", "Cost Analysis", "Policy Comparison"]
+tab_eda, tab_summary, tab_charts, tab_cost, tab_policy = st.tabs(tabs)
 
 # ── Tab: Data Overview (EDA) ──────────────────────────────────────────────────
 with tab_eda:
@@ -476,6 +626,8 @@ if not run:
         st.info("Click **Run Simulation** in the sidebar to see charts here.")
     with tab_cost:
         st.info("Click **Run Simulation** in the sidebar to see cost analysis here.")
+    with tab_policy:
+        st.info("Enable **Compare all scheduling policies** in the sidebar, then click **Run Simulation**.")
     st.stop()
 
 # ── run simulation ────────────────────────────────────────────────────────────
@@ -528,7 +680,45 @@ with tab_summary:
     c6.metric("Recommended HB close time", str(hb["recommended_close_p95"]))
 
     st.divider()
+
+    # ── HB bottleneck analysis ─────────────────────────────────────────────
+    st.subheader("Holding Bay Capacity Analysis")
+    st.caption(
+        "The histogram shows how often the peak simultaneous bay occupancy reached each level "
+        "across all simulated days. The P95 line drives the recommendation: on 95% of days "
+        "the recommended bay count is sufficient, limiting bottlenecks to ≤5% of operating days."
+    )
+    _show_fig(plot_hb_peak_distribution(summary))
+
+    oh1, oh2, oh3 = st.columns(3)
+    oh1.metric("Worst-case peak (all days)", f"{hb['overall_peak_bays']} bays")
+    oh2.metric("P90 daily peak", f"{hb['peak_bays_p90']:.1f} bays")
+    oh3.metric("P95 daily peak → recommendation", f"{hb['recommended_bays_p95']} bays")
+
+    st.divider()
+
+    # ── overflow breakdown ─────────────────────────────────────────────────
+    st.subheader("Procedure Overflow (Scheduled Past Room Closing Time)")
+    st.caption(
+        "Overflow means a procedure could not start before the room's scheduled closing "
+        "time — a direct measure of scheduling delays and care access."
+    )
+    ov1, ov2, ov3, ov4 = st.columns(4)
+    ov1.metric("Total overflow",  str(summary["overflow_total"]))
+    ov2.metric("Cath overflow",   str(summary.get("overflow_cath", "—")))
+    ov3.metric("EP overflow",     str(summary.get("overflow_ep", "—")))
+    ov4.metric("Flex room overflow", str(summary.get("overflow_middle", "—")))
+
+    st.divider()
+
+    # ── close-time sensitivity ─────────────────────────────────────────────
     st.subheader("Close-time Sensitivity")
+    st.caption(
+        "Closing the holding bays earlier saves staff cost but risks leaving recovering patients "
+        "without a bay — requiring hospital admission. Later close times increase nurse labour cost."
+    )
+    _show_fig(plot_close_time_sensitivity(summary))
+
     close_df = pd.DataFrame(summary["close_time_eval"]).rename(columns={
         "close_time": "Close time",
         "days_with_any_demand_after_close": "Days with demand after close",
@@ -604,3 +794,71 @@ with tab_cost:
             }),
             width='stretch',
         )
+
+# ── Tab: Policy Comparison ────────────────────────────────────────────────────
+with tab_policy:
+    if not compare_policies or policy_results is None:
+        st.info(
+            "Enable **Compare all scheduling policies** in the sidebar and click "
+            "**Run Simulation** to compare all five scheduling rules side by side."
+        )
+    else:
+        st.markdown(
+            "The simulation was run five times — once per scheduling priority rule — "
+            "keeping all other parameters identical. Use these charts to select the rule "
+            "that best balances room utilization, patient delays (overflow), and holding bay demand."
+        )
+
+        # ── summary table ─────────────────────────────────────────────────
+        st.subheader("Policy Comparison Summary")
+        policy_df = plot_policy_summary_table(policy_results)
+        best_rule = policy_results[0]["priority_rule"]   # ranked #1 by comparePriorityRules
+        st.caption(
+            f"Policies ranked by: fewest overflow → lowest HB P95 peak → earliest close time → "
+            f"highest utilization. **Top-ranked rule: {best_rule}**"
+        )
+        st.dataframe(policy_df, width='stretch', hide_index=True)
+
+        st.divider()
+
+        # ── utilization comparison ─────────────────────────────────────────
+        st.subheader("1. Room Utilization by Policy")
+        st.caption(
+            "Higher utilization means the procedure rooms are being used more productively. "
+            "The hospital's goal is sufficient utilization to support hiring an additional EP provider."
+        )
+        _show_fig(plot_policy_utilization(policy_results))
+
+        st.divider()
+
+        # ── overflow comparison ────────────────────────────────────────────
+        st.subheader("2. Procedure Delays (Overflow) by Policy")
+        st.caption(
+            "Overflow counts procedures scheduled past the room's closing time — a direct proxy "
+            "for care delays. Fewer overflow procedures means less patient waiting and better "
+            "staff experience."
+        )
+        _show_fig(plot_policy_overflow(policy_results))
+
+        st.divider()
+
+        # ── HB & close-time comparison ─────────────────────────────────────
+        st.subheader("3. Holding Bay Requirements & Close Time by Policy")
+        st.caption(
+            "The recommended HB count (P95 peak) and recommended close time vary by policy because "
+            "different scheduling orders change when patients arrive in recovery. A policy that "
+            "requires fewer bays or an earlier close time may reduce capital and staffing costs."
+        )
+        _show_fig(plot_policy_hb_and_close(policy_results))
+
+        st.divider()
+
+        # ── current run detail ─────────────────────────────────────────────
+        st.subheader("4. Selected Policy Detail")
+        st.caption(f"Results for the currently selected policy: **{summary['priority_rule']}**")
+        d1, d2, d3, d4, d5 = st.columns(5)
+        d1.metric("Cath utilization",    f"{round(summary['cath_utilization_avg']*100,1)}%")
+        d2.metric("EP utilization",      f"{round(summary['ep_utilization_avg']*100,1)}%")
+        d3.metric("Overflow procedures", str(summary["overflow_total"]))
+        d4.metric("Recommended HB bays", str(summary["holding_bay"]["recommended_bays_p95"]))
+        d5.metric("Recommended close",   str(summary["holding_bay"]["recommended_close_p95"]))
