@@ -6,22 +6,23 @@ _repo_root = os.path.dirname(os.path.abspath(__file__))
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
-# Intercept Colab-specific os.chdir calls so the app works outside Colab
 _orig_chdir = os.chdir
 def _safe_chdir(path):
     if "/content/test-epcath" in str(path):
         return
     _orig_chdir(path)
 os.chdir = _safe_chdir
-_safe_chdir(_repo_root)  # start in repo root
+_safe_chdir(_repo_root)
 
-# ── project imports ───────────────────────────────────────────────────────────
+# ── imports ───────────────────────────────────────────────────────────────────
 import random
 import streamlit as st
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import pandas as pd
+import numpy as np
 
 from Params import Params
 import Simulation
@@ -42,10 +43,162 @@ PRIORITY_RULES = [
     "shortest recovery time first",
 ]
 
+PROC_COLS = [
+    "day", "week", "lab", "proc_time_min", "sched_horizon",
+    "room_constraint", "pre_time_hr", "post_time_hr", "proc_type",
+    "provider", "pre_clean_hr", "post_clean_hr", "hist_order",
+    "proc_time_no_to", "post_to_time", "proc_id",
+]
+
+SHIFT_COLS = ["day", "shift_length_hr", "num_procedures", "shift_type", "lab", "provider", "room_constraint"]
+
+LAB_MAP  = {0.0: "Cath", 1.0: "EP"}
+HORIZON_MAP = {1: "Emergency", 2: "Same day", 3: "Same week"}
+ROOM_MAP = {0.0: "Cath only", 1.0: "EP only", 2.0: "Flexible"}
+SHIFT_MAP = {0.25: "Quarter day", 0.5: "Half day", 1.0: "Full day"}
+
+BG   = "#F7F5F2"
+C1   = "#3B6EA5"
+C2   = "#C0392B"
+GRID = "#E6E6E6"
+
+def _style(ax, grid_axis="y"):
+    ax.set_facecolor(BG)
+    ax.grid(axis=grid_axis, color=GRID, linewidth=0.7)
+    ax.set_axisbelow(True)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.spines[["left", "bottom"]].set_color("#CFCFCF")
+    ax.tick_params(length=0, labelsize=9)
+
+# ── data loaders ──────────────────────────────────────────────────────────────
+@st.cache_data
+def load_proc_data(path):
+    df = pd.read_csv(path, header=None, names=PROC_COLS)
+    df["lab_name"] = df["lab"].map(LAB_MAP)
+    df["horizon_name"] = df["sched_horizon"].map(HORIZON_MAP).fillna("Unknown")
+    df["room_name"] = df["room_constraint"].map(ROOM_MAP).fillna("Other")
+    return df
+
+@st.cache_data
+def load_shift_data(path):
+    df = pd.read_csv(path, header=None, names=SHIFT_COLS)
+    df["lab_name"] = df["lab"].map(LAB_MAP)
+    df["shift_name"] = df["shift_type"].map(SHIFT_MAP).fillna("Unknown")
+    return df
+
+def get_file_paths(scenario_key):
+    p = Params()
+    p.wFiles.value = scenario_key
+    p.getScenarioFileNames()
+    return p.procDataFile, p.shiftDataFile
+
+# ── EDA charts ────────────────────────────────────────────────────────────────
+def plot_volume_by_lab(df):
+    counts = df["lab_name"].value_counts()
+    fig, ax = plt.subplots(figsize=(5, 3.5), facecolor=BG)
+    bars = ax.bar(counts.index, counts.values, color=[C1, C2], width=0.5)
+    ax.bar_label(bars, padding=4, fontsize=9)
+    ax.set_title("Procedures by lab", fontsize=11, fontweight="bold", loc="left")
+    ax.set_ylabel("Procedures")
+    _style(ax)
+    fig.tight_layout()
+    return fig
+
+def plot_proc_duration(df):
+    fig, ax = plt.subplots(figsize=(6, 3.5), facecolor=BG)
+    for lab, color in [("Cath", C1), ("EP", C2)]:
+        sub = df[df["lab_name"] == lab]["proc_time_min"]
+        ax.hist(sub, bins=40, alpha=0.7, color=color, label=lab, edgecolor="none")
+    ax.set_title("Procedure duration distribution", fontsize=11, fontweight="bold", loc="left")
+    ax.set_xlabel("Duration (minutes)")
+    ax.set_ylabel("Count")
+    ax.legend(frameon=False, fontsize=9)
+    _style(ax, "y")
+    fig.tight_layout()
+    return fig
+
+def plot_horizon(df):
+    counts = df["horizon_name"].value_counts().reindex(["Same week", "Same day", "Emergency"], fill_value=0)
+    fig, ax = plt.subplots(figsize=(5, 3.5), facecolor=BG)
+    colors = [C1, C2, "#E67E22"]
+    bars = ax.barh(counts.index, counts.values, color=colors, height=0.5)
+    ax.bar_label(bars, padding=4, fontsize=9)
+    ax.set_title("Scheduling horizon", fontsize=11, fontweight="bold", loc="left")
+    ax.set_xlabel("Procedures")
+    _style(ax, "x")
+    fig.tight_layout()
+    return fig
+
+def plot_pre_post_times(df):
+    fig, axes = plt.subplots(1, 2, figsize=(9, 3.5), facecolor=BG)
+    fig.patch.set_facecolor(BG)
+    for ax, col, title in zip(
+        axes,
+        ["pre_time_hr", "post_time_hr"],
+        ["Pre-procedure HB time (hours)", "Post-procedure HB time (hours)"],
+    ):
+        ax.hist(df[col].clip(upper=df[col].quantile(0.99)), bins=40, color=C1, edgecolor="none", alpha=0.85)
+        ax.set_title(title, fontsize=10, fontweight="bold", loc="left")
+        ax.set_xlabel("Hours")
+        ax.set_ylabel("Count")
+        _style(ax, "y")
+    fig.tight_layout()
+    return fig
+
+def plot_daily_volume(df):
+    daily = df.groupby(["day", "lab_name"]).size().unstack(fill_value=0)
+    fig, ax = plt.subplots(figsize=(9, 3.5), facecolor=BG)
+    if "Cath" in daily.columns:
+        ax.plot(daily.index, daily["Cath"], color=C1, linewidth=0.9, label="Cath", alpha=0.85)
+    if "EP" in daily.columns:
+        ax.plot(daily.index, daily["EP"], color=C2, linewidth=0.9, label="EP", alpha=0.85)
+    ax.set_title("Daily procedure volume over simulation period", fontsize=11, fontweight="bold", loc="left")
+    ax.set_xlabel("Day")
+    ax.set_ylabel("Procedures")
+    ax.legend(frameon=False, fontsize=9)
+    _style(ax, "y")
+    fig.tight_layout()
+    return fig
+
+def plot_provider_workload(df):
+    top = df["provider"].value_counts().head(20)
+    fig, ax = plt.subplots(figsize=(8, 4), facecolor=BG)
+    ax.barh(top.index.astype(str)[::-1], top.values[::-1], color=C1, height=0.6)
+    ax.set_title("Top 20 providers by procedure volume", fontsize=11, fontweight="bold", loc="left")
+    ax.set_xlabel("Procedures")
+    _style(ax, "x")
+    fig.tight_layout()
+    return fig
+
+def plot_shift_types(sdf):
+    counts = sdf["shift_name"].value_counts().reindex(["Full day", "Half day", "Quarter day"], fill_value=0)
+    fig, ax = plt.subplots(figsize=(5, 3.5), facecolor=BG)
+    bars = ax.bar(counts.index, counts.values, color=[C1, C2, "#6B7A8F"], width=0.5)
+    ax.bar_label(bars, padding=4, fontsize=9)
+    ax.set_title("Shift types", fontsize=11, fontweight="bold", loc="left")
+    ax.set_ylabel("Shifts")
+    _style(ax)
+    fig.tight_layout()
+    return fig
+
+def plot_shift_load(sdf):
+    daily = sdf.groupby(["day", "lab_name"])["num_procedures"].sum().unstack(fill_value=0)
+    fig, ax = plt.subplots(figsize=(9, 3.5), facecolor=BG)
+    if "Cath" in daily.columns:
+        ax.plot(daily.index, daily["Cath"], color=C1, linewidth=0.9, label="Cath", alpha=0.85)
+    if "EP" in daily.columns:
+        ax.plot(daily.index, daily["EP"], color=C2, linewidth=0.9, label="EP", alpha=0.85)
+    ax.set_title("Daily provider capacity (procedures scheduled per day)", fontsize=11, fontweight="bold", loc="left")
+    ax.set_xlabel("Day")
+    ax.set_ylabel("Scheduled procedures")
+    ax.legend(frameon=False, fontsize=9)
+    _style(ax, "y")
+    fig.tight_layout()
+    return fig
+
 # ── helpers ───────────────────────────────────────────────────────────────────
 def make_params(scenario_key, priority_rule, hb_clean_time, num_cath_rooms, resolution):
-    """Create a configured Params object without ipywidgets or Colab dependencies."""
-    p = Params()  # os.chdir inside __init__ is safely intercepted
+    p = Params()
     p.wFiles.value = scenario_key
     p.getScenarioFileNames()
     p.wSortPriority.value = priority_rule
@@ -65,8 +218,8 @@ st.set_page_config(
 
 st.title("EP/CATH Lab Simulation")
 st.markdown(
-    "Simulate patient scheduling through the Electrophysiology and Catheterization labs. "
-    "Get recommendations for holding bay sizing, operating hours, and cost optimization."
+    "Explore the underlying procedure and shift data, set parameters, and run the "
+    "discrete event simulation to get holding bay sizing and cost recommendations."
 )
 
 # ── sidebar ───────────────────────────────────────────────────────────────────
@@ -82,20 +235,90 @@ with st.sidebar:
     compare_policies = st.checkbox(
         "Compare all scheduling policies",
         value=False,
-        help="Runs 5 simulations back-to-back — takes longer but adds policy comparison charts.",
+        help="Runs 5 simulations — takes longer but adds policy comparison charts.",
     )
 
     st.divider()
     run = st.button("Run Simulation", type="primary", use_container_width=True)
 
-# ── main area ─────────────────────────────────────────────────────────────────
+# ── tabs (EDA always visible; simulation tabs appear after run) ───────────────
+scenario_key = SCENARIOS[scenario_label]
+proc_file, shift_file = get_file_paths(scenario_key)
+proc_df = load_proc_data(proc_file)
+shift_df = load_shift_data(shift_file)
+
+tabs = ["Data Overview", "Summary", "Charts", "Cost Analysis"]
+tab_eda, tab_summary, tab_charts, tab_cost = st.tabs(tabs)
+
+# ── Tab: Data Overview (EDA) ──────────────────────────────────────────────────
+with tab_eda:
+    st.subheader("Procedure Data")
+
+    # Top-level stats
+    total = len(proc_df)
+    cath_n = (proc_df["lab_name"] == "Cath").sum()
+    ep_n   = (proc_df["lab_name"] == "EP").sum()
+    days_n = proc_df["day"].nunique()
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total procedures", f"{total:,}")
+    m2.metric("Cath procedures", f"{cath_n:,}")
+    m3.metric("EP procedures", f"{ep_n:,}")
+    m4.metric("Simulation days", str(days_n))
+
+    st.divider()
+
+    # Row 1 — volume and duration
+    c1, c2 = st.columns([1, 1.3])
+    with c1:
+        st.pyplot(plot_volume_by_lab(proc_df))
+    with c2:
+        st.pyplot(plot_proc_duration(proc_df))
+
+    # Row 2 — horizon and pre/post times
+    c3, c4 = st.columns([1, 1.8])
+    with c3:
+        st.pyplot(plot_horizon(proc_df))
+    with c4:
+        st.pyplot(plot_pre_post_times(proc_df))
+
+    # Row 3 — daily volume
+    st.pyplot(plot_daily_volume(proc_df))
+
+    # Row 4 — provider workload
+    st.pyplot(plot_provider_workload(proc_df))
+
+    st.subheader("Shift Data")
+    m5, m6, m7 = st.columns(3)
+    m5.metric("Total shifts", f"{len(shift_df):,}")
+    m6.metric("Unique providers", str(shift_df["provider"].nunique()))
+    m7.metric("Avg procedures per shift", f"{shift_df['num_procedures'].mean():.1f}")
+
+    c5, c6 = st.columns([1, 1.8])
+    with c5:
+        st.pyplot(plot_shift_types(shift_df))
+    with c6:
+        st.pyplot(plot_shift_load(shift_df))
+
+    # Duration stats table
+    st.subheader("Procedure Duration Summary")
+    stats = proc_df.groupby("lab_name")["proc_time_min"].describe().round(1)
+    stats.columns = ["Count", "Mean (min)", "Std", "Min", "25%", "Median", "75%", "Max"]
+    st.dataframe(stats, use_container_width=True)
+
+# ── simulation result tabs ────────────────────────────────────────────────────
 if not run:
-    st.info("Set your parameters in the sidebar, then click **Run Simulation**.")
+    with tab_summary:
+        st.info("Click **Run Simulation** in the sidebar to see results here.")
+    with tab_charts:
+        st.info("Click **Run Simulation** in the sidebar to see charts here.")
+    with tab_cost:
+        st.info("Click **Run Simulation** in the sidebar to see cost analysis here.")
     st.stop()
 
+# ── run simulation ────────────────────────────────────────────────────────────
 with st.spinner("Running simulation... this may take 30-60 seconds."):
     random.seed(int(random_seed))
-    scenario_key = SCENARIOS[scenario_label]
 
     try:
         p = make_params(scenario_key, priority_rule, hb_clean_time, num_cath_rooms, resolution)
@@ -127,25 +350,21 @@ with st.spinner("Running simulation... this may take 30-60 seconds."):
 
 st.success("Simulation complete!")
 
-# ── results tabs ──────────────────────────────────────────────────────────────
-tab1, tab2, tab3 = st.tabs(["Summary", "Charts", "Cost Analysis"])
-
-# ── Tab 1: Summary ────────────────────────────────────────────────────────────
-with tab1:
+# ── Tab: Summary ──────────────────────────────────────────────────────────────
+with tab_summary:
     hb = summary["holding_bay"]
 
     st.subheader("Key Metrics")
     c1, c2, c3 = st.columns(3)
     c1.metric("Recommended holding bays", f"{hb['recommended_bays_p95']} bays",
-              help="95th percentile daily peak — handles 95% of days without overcapacity")
+              help="95th percentile daily peak")
     c2.metric("Cath lab utilization", f"{round(summary['cath_utilization_avg'] * 100, 1)}%")
     c3.metric("EP lab utilization", f"{round(summary['ep_utilization_avg'] * 100, 1)}%")
 
     c4, c5, c6 = st.columns(3)
     c4.metric("Procedures scheduled", f"{summary['procs_placed']} / {summary['total_procs']}")
     c5.metric("Overflow (past closing)", str(summary["overflow_total"]))
-    c6.metric("Recommended HB close time", str(hb["recommended_close_p95"]),
-              help="95th percentile last patient departure time")
+    c6.metric("Recommended HB close time", str(hb["recommended_close_p95"]))
 
     st.divider()
     st.subheader("Close-time Sensitivity")
@@ -157,8 +376,8 @@ with tab1:
     })
     st.dataframe(close_df.drop(columns=["close_hour"], errors="ignore"), use_container_width=True)
 
-# ── Tab 2: Charts ─────────────────────────────────────────────────────────────
-with tab2:
+# ── Tab: Charts ───────────────────────────────────────────────────────────────
+with tab_charts:
     if "cost_analysis" not in summary:
         st.warning("Cost analysis data unavailable — some charts cannot be generated.")
     else:
@@ -177,8 +396,8 @@ with tab2:
             import traceback
             st.code(traceback.format_exc())
 
-# ── Tab 3: Cost Analysis ──────────────────────────────────────────────────────
-with tab3:
+# ── Tab: Cost Analysis ────────────────────────────────────────────────────────
+with tab_cost:
     if "cost_analysis" not in summary:
         st.warning("Cost analysis not available.")
     else:
@@ -186,18 +405,12 @@ with tab3:
 
         st.subheader("Holding Bay Recommendations")
         hb_service = ca["hb"]["service_constraint_recommendation"]
-        hb_cost = ca["hb"]["cost_recommendation"]
+        hb_cost    = ca["hb"]["cost_recommendation"]
         cc1, cc2 = st.columns(2)
-        cc1.metric(
-            "Service-constrained recommendation",
-            f"{int(hb_service['hb_count'])} bays",
-            help="Minimum bays meeting <=5% overcapacity days constraint",
-        )
-        cc2.metric(
-            "Cost-minimizing recommendation",
-            f"{int(hb_cost['hb_count'])} bays",
-            help="Bay count with lowest total (cancellation + empty bay) cost",
-        )
+        cc1.metric("Service-constrained recommendation", f"{int(hb_service['hb_count'])} bays",
+                   help="Minimum bays meeting <=5% overcapacity days constraint")
+        cc2.metric("Cost-minimizing recommendation", f"{int(hb_cost['hb_count'])} bays",
+                   help="Bay count with lowest total cost")
 
         st.subheader("Holding Bay Cost Table")
         st.dataframe(
