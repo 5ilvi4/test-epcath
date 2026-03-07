@@ -780,10 +780,13 @@ with st.spinner("Running simulation... this may take 30-60 seconds."):
         st.error(f"Failed to initialize parameters: {e}")
         st.stop()
 
-    policy_results = None
+    policy_results = None   # list of ranked policy summaries (or None)
+    policy_best = None      # best policy summary dict (or None)
     if compare_policies:
         try:
-            policy_results = Simulation.comparePriorityRules(p, saveResults=False)
+            _pr = Simulation.comparePriorityRules(p, saveResults=False)
+            policy_results = _pr["ranked"]
+            policy_best = _pr["best"]
         except Exception as e:
             st.warning(f"Policy comparison failed: {e}")
 
@@ -938,7 +941,7 @@ with tab_cost:
 
 # ── Tab: Policy Comparison ────────────────────────────────────────────────────
 with tab_policy:
-    if not compare_policies or policy_results is None:
+    if not compare_policies or policy_results is None or policy_best is None:
         st.info(
             "Enable **Compare all scheduling policies** in the sidebar and click "
             "**Run Simulation** to compare all five scheduling rules side by side."
@@ -950,7 +953,7 @@ with tab_policy:
             "that best balances room utilization, patient delays (overflow), and holding bay demand."
         )
 
-        best_rule = policy_results[0]["priority_rule"]   # ranked #1 by comparePriorityRules
+        best_rule = policy_best["priority_rule"]   # ranked #1 by comparePriorityRules
 
         # ── at-a-glance winner callout ─────────────────────────────────────
         st.success(
