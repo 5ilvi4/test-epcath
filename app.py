@@ -15,6 +15,7 @@ os.chdir = _safe_chdir
 _safe_chdir(_repo_root)
 
 # ── imports ───────────────────────────────────────────────────────────────────
+import io
 import random
 import streamlit as st
 import matplotlib
@@ -80,6 +81,20 @@ COST_ASSUMPTIONS = {
     "Overtime multiplier":                       "1.5× ($72 / hour)",
     "Baseline close time":                       "17:00",
 }
+
+def _show_fig(fig):
+    """Render a matplotlib figure to PNG bytes and display via st.image().
+
+    st.pyplot() in Streamlit 1.55 can raise MediaFileStorageError when the
+    figure object is garbage-collected before the browser fetches the image.
+    Writing to a BytesIO buffer first avoids that race condition.
+    """
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=110, bbox_inches="tight",
+                facecolor=fig.get_facecolor())
+    buf.seek(0)
+    plt.close(fig)
+    st.image(buf)
 
 def _style(ax, grid_axis="y"):
     ax.set_facecolor(BG)
@@ -363,18 +378,18 @@ with tab_eda:
 
     c1, c2 = st.columns([1, 1.3])
     with c1:
-        st.pyplot(plot_volume_by_lab(proc_df))
+        _show_fig(plot_volume_by_lab(proc_df))
     with c2:
-        st.pyplot(plot_proc_duration(proc_df))
+        _show_fig(plot_proc_duration(proc_df))
 
     c3, c4 = st.columns([1, 1.8])
     with c3:
-        st.pyplot(plot_horizon(proc_df))
+        _show_fig(plot_horizon(proc_df))
     with c4:
-        st.pyplot(plot_pre_post_times(proc_df))
+        _show_fig(plot_pre_post_times(proc_df))
 
-    st.pyplot(plot_daily_volume(proc_df))
-    st.pyplot(plot_provider_workload(proc_df))
+    _show_fig(plot_daily_volume(proc_df))
+    _show_fig(plot_provider_workload(proc_df))
 
     st.subheader("Procedure Duration Summary")
     stats = proc_df.groupby("lab_name")["proc_time_min"].describe().round(1)
@@ -391,9 +406,9 @@ with tab_eda:
 
     c5, c6 = st.columns([1, 1.8])
     with c5:
-        st.pyplot(plot_shift_types(shift_df))
+        _show_fig(plot_shift_types(shift_df))
     with c6:
-        st.pyplot(plot_shift_load(shift_df))
+        _show_fig(plot_shift_load(shift_df))
 
     # ── Cost Context ──────────────────────────────────────────────────────────
     st.divider()
@@ -421,9 +436,9 @@ with tab_eda:
     )
     ca1, ca2 = st.columns([1, 1.6])
     with ca1:
-        st.pyplot(plot_post_time_by_lab(proc_df))
+        _show_fig(plot_post_time_by_lab(proc_df))
     with ca2:
-        st.pyplot(plot_hb_demand_by_type(proc_df))
+        _show_fig(plot_hb_demand_by_type(proc_df))
 
     st.divider()
 
@@ -433,7 +448,7 @@ with tab_eda:
         "The existing plan uses 21 holding bays. The chart below shows how cost changes "
         "as bay count varies — too few bays causes cancellations, too many wastes money on idle space."
     )
-    st.pyplot(plot_cost_curve(cost_table_baseline))
+    _show_fig(plot_cost_curve(cost_table_baseline))
 
     # Savings summary
     cur_row  = cost_table_baseline[cost_table_baseline["hb_count"] == CURRENT_HB_COUNT]
@@ -535,7 +550,7 @@ with tab_charts:
             )
             for name, fig in figs.items():
                 st.subheader(name.replace("_", " ").title())
-                st.pyplot(fig)
+                _show_fig(fig)
         except Exception as e:
             st.error(f"Chart generation failed: {e}")
             import traceback
