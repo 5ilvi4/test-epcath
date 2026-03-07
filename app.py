@@ -346,7 +346,7 @@ with st.sidebar:
         help="Runs 5 simulations — takes longer but adds policy comparison charts.",
     )
     st.divider()
-    run = st.button("Run Simulation", type="primary", use_container_width=True)
+    run = st.button("Run Simulation", type="primary", width='stretch')
 
 # ── load data (always) ────────────────────────────────────────────────────────
 scenario_key = SCENARIOS[scenario_label]
@@ -394,7 +394,7 @@ with tab_eda:
     st.subheader("Procedure Duration Summary")
     stats = proc_df.groupby("lab_name")["proc_time_min"].describe().round(1)
     stats.columns = ["Count", "Mean (min)", "Std", "Min", "25%", "Median", "75%", "Max"]
-    st.dataframe(stats, use_container_width=True)
+    st.dataframe(stats, width='stretch')
 
     # ── Shift Data ────────────────────────────────────────────────────────────
     st.divider()
@@ -424,7 +424,7 @@ with tab_eda:
         list(COST_ASSUMPTIONS.items()),
         columns=["Parameter", "Value"]
     )
-    st.dataframe(assump_df, use_container_width=True, hide_index=True)
+    st.dataframe(assump_df, width='stretch', hide_index=True)
 
     st.divider()
 
@@ -535,7 +535,7 @@ with tab_summary:
         "total_bay_hours_after_close": "Total bay-hours after close",
         "average_bay_hours_after_close_per_day": "Avg bay-hours/day after close",
     })
-    st.dataframe(close_df.drop(columns=["close_hour"], errors="ignore"), use_container_width=True)
+    st.dataframe(close_df.drop(columns=["close_hour"], errors="ignore"), width='stretch')
 
 # ── Tab: Charts ───────────────────────────────────────────────────────────────
 with tab_charts:
@@ -580,7 +580,7 @@ with tab_cost:
                 "total_holding_bay_cost":  "${:.2f}",
                 "pct_days_with_instances": "{:.1%}",
             }),
-            use_container_width=True,
+            width='stretch',
         )
 
         st.divider()
@@ -602,5 +602,5 @@ with tab_cost:
                 "admission_cost":       "${:.2f}",
                 "total_cost":           "${:.2f}",
             }),
-            use_container_width=True,
+            width='stretch',
         )
