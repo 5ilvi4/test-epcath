@@ -1,105 +1,524 @@
 # EP/CATH Lab Planning Simulator
 
-A Discrete Event Simulation (DES) tool for planning a joint Electrophysiology (EP) and Catheterization (Cath) lab. Built with Python and deployed as an interactive Streamlit web app.
-
-## What it does
-
-The simulator helps hospital planners answer three key operational questions:
-
-1. **How many holding bay spaces are needed?**
-2. **What time should the holding bay close each day?**
-3. **Which scheduling priority rule minimizes patient delays and maximizes room utilization?**
-
-It runs a day-by-day simulation of 7,402 patient procedures (based on July 2015 case data), tracks room occupancy, holding bay demand, and overflow events — then recommends the optimal configuration using cost-benefit analysis.
+> **New here?** Start with the [Plain-Language Overview](#plain-language-overview) — no medical or technical background needed. The deeper technical sections follow after.
 
 ---
 
-## Live App
+## Plain-Language Overview
 
-The app is deployed on [Streamlit Cloud](https://streamlit.io/cloud). Use the sidebar to configure parameters and click **Run Simulation**.
+### What is this?
 
----
+This is a planning tool built for a hospital that is designing a new medical procedure lab. It helps answer three very practical questions before the lab is even built:
 
-## App Tabs
+1. **How many recovery spaces do we need?**
+2. **What time can we close the recovery area each day?**
+3. **What is the best way to order patient procedures each morning?**
 
-| Tab | Contents |
-|-----|----------|
-| **Summary** | Key metrics, holding bay capacity histogram, overflow breakdown, close-time sensitivity chart |
-| **Charts** | Full visualization suite: cost curves, utilization, overflow, HB peaks, close-time burden |
-| **Cost Analysis** | Economic trade-off tables for bay count and close time, with cost-minimizing and service-constraint recommendations |
-| **Raw Data** | Downloadable simulation outputs |
-| **Policy Comparison** | Side-by-side comparison of all 5 scheduling priority rules — composite score, radar chart, heatmap, and individual KPI charts |
+Getting these decisions wrong is costly. Too few recovery spaces means patients have nowhere to go after their procedure — leading to cancellations and delays. Too many spaces means the hospital paid to build and staff rooms that sit empty most of the day. Closing too early strands patients and forces expensive hospital admissions. The wrong procedure order wastes room time and creates unnecessary overtime.
+
+This simulator uses real historical data to test different options and recommend the best configuration before anything is built or changed.
 
 ---
 
-## Scheduling Priority Rules
+### What are EP and Cath labs?
 
-The simulator can compare five different ways to order procedures each day:
+A hospital's **Cath lab** (Catheterization laboratory) is where doctors insert thin tubes (catheters) into blood vessels to diagnose and treat heart conditions — such as clearing a blockage or placing a stent.
 
-- **Historical order** — as recorded in the original schedule
-- **Longest procedure first** — fills the longest slots early
-- **Shortest procedure first** — minimizes idle gaps
-- **Longest recovery time first** — moves high-demand HB patients through earlier
-- **Shortest recovery time first** — clears the HB faster at end of day
+An **EP lab** (Electrophysiology laboratory) is where doctors diagnose and treat electrical problems in the heart — such as abnormal heart rhythms (arrhythmias). Treatments include ablations and pacemaker implants.
 
-The **Policy Comparison** tab ranks all five rules across five KPIs (room utilization, overflow, HB peak, HB close hour) and highlights the recommended rule.
+Both labs involve highly specialised equipment and staff, and both require patients to recover in a monitored space before going home or to a regular hospital room. This hospital is building a **joint lab** — one shared facility that handles both Cath and EP procedures — which means they need to carefully plan how the two types of work will share rooms, staff, and recovery space.
 
 ---
 
-## Simulation Logic
+### What is a "holding bay"?
 
-### Input data
-- **Shift data** — which providers work which rooms on which days
-- **Procedure data** — 7,402 procedures with durations, types, and urgency levels
+The **holding bay (HB)** is the recovery area — the room (or set of beds/spaces) where patients wait before their procedure and recover after it. Think of it like a waiting and recovery lounge managed by nurses.
 
-### Core steps
-1. **Clean procedure times** — add turnover time; cap at max room time
-2. **Pack shifts into rooms** — assign provider shifts to Cath, EP, or flex rooms
-3. **Pack procedures into shifts** — schedule each procedure into the next available slot using the chosen priority rule; same-day and emergency cases get priority
-4. **Track holding bay occupancy** — patients enter the HB when their procedure ends and leave after recovery + cleaning time; occupancy is recorded every 5 minutes
-5. **Build summary statistics** — room utilization, overflow count, crossover count, HB demand
+- **Before the procedure:** the patient is prepared in the holding bay (IV lines placed, consent confirmed, monitoring started).
+- **After the procedure:** the patient returns to the holding bay to recover — typically for 1–8 hours depending on the procedure — before being discharged or transferred.
 
-### Sizing recommendation
-Recommendations use the **95th percentile** of daily peak demand — this handles 95% of operating days without overcapacity, avoiding over-building for rare worst-case days.
+Each space in the holding bay can only hold one patient at a time. If all spaces are occupied and another patient finishes their procedure, there is a problem: that patient has nowhere to go, which delays the room being cleaned and used for the next case.
 
 ---
 
-## Cost Analysis
+### What is the "simulation"?
 
-### Holding bay count
-For each candidate bay count, the model computes:
+The simulator **replays one full year of procedures** (7,402 procedures from July 2015 data, projected forward) as if they were happening day by day. For each day, it:
+
+1. Assigns providers (doctors, nurses) to rooms based on who is working that day
+2. Schedules each procedure into the next available room slot
+3. Tracks exactly when each patient finishes and enters the recovery holding bay
+4. Tracks how many holding bay spaces are occupied at every 5-minute interval throughout the day
+5. Records any procedures that couldn't fit into the day (called "overflow")
+
+By running this replay, we get a detailed picture of what a typical day — and a peak day — actually looks like.
+
+---
+
+### Why use a simulation instead of just estimating?
+
+A simple estimate might say: "We do about 30 procedures a day, each takes about 4 hours to recover, so we need about 5 bays." But real life is messier:
+
+- Some days have 20 procedures, some days have 45
+- Recovery times range from 30 minutes to 8 hours
+- Some procedures run over their scheduled time
+- Some days have more emergency cases that jump the queue
+- Some providers work only half-days
+
+A simulation captures all of this variability and tells you what actually happens 95% of the time — not just on an average day.
+
+---
+
+### The three planning questions, explained simply
+
+#### Question 1: How many holding bays do we need?
+
+The answer comes from looking at the busiest moments across all 260 simulated operating days. Specifically, the tool looks at the **95th percentile peak** — the number of bays occupied simultaneously on one of the 13 busiest days of the year.
+
+> **Why 95th percentile and not the absolute worst day?**
+> If you build for the single worst day in history, you end up with bays that sit empty 364 days a year — very expensive. The 95th percentile means the facility handles 95% of days without any bottleneck, and accepts a mild overflow on the remaining 5% (about 13 days per year). This is the standard planning benchmark in healthcare capacity design.
+
+The tool also runs a cost check: it calculates what it costs if you have *too few* bays (procedures get cancelled or delayed, losing revenue) versus *too many* bays (idle space that still costs money to maintain). The final recommendation is the higher of (a) the cost-minimizing count and (b) the 95th-percentile safety floor.
+
+---
+
+#### Question 2: What time should the holding bay close?
+
+The holding bay doesn't stay open all night — nurses need to go home. But closing too early means patients who are still recovering have to be admitted to a regular hospital bed (an "inpatient admission"), which is expensive and disruptive.
+
+The tool evaluates every possible closing time from 5:00 PM to midnight and calculates the total cost of each option:
+
+- **Close too early** → more patients stranded → more expensive inpatient admissions
+- **Close too late** → longer nursing shifts → more overtime pay
+
+The optimal closing time is where those two costs balance out and the total is lowest.
+
+---
+
+#### Question 3: Which scheduling policy is best?
+
+Every morning, someone decides what order to run the day's procedures. The tool tests five different orderings:
+
+| Policy | What it does |
+|--------|-------------|
+| **Historical** | Uses the same order as the real historical schedule |
+| **Longest procedure first** | Puts the most time-consuming cases at the start of the day |
+| **Shortest procedure first** | Knocks out the quick cases first |
+| **Longest recovery time first** | Prioritises patients who will need the most time in recovery, getting them through earlier |
+| **Shortest recovery time first** | Prioritises patients who recover fastest, clearing recovery space quickly |
+
+Each policy is tested with everything else held equal. The one that produces the fewest delays, lowest peak holding bay demand, and best room efficiency is recommended.
+
+---
+
+### How to read the app
+
+The app has six tabs:
+
+| Tab | What you'll find |
+|-----|-----------------|
+| **Data Overview** | Charts about the input data — how many procedures, how long they take, who's working, what recovery times look like. No simulation needed to see this. |
+| **Summary** | After running the simulation: the key numbers at a glance — recommended bay count, room usage rates, number of delayed procedures, recommended closing time. |
+| **Charts** | Detailed charts: cost curves, utilization trends, overflow breakdown, and holding bay demand over time. |
+| **Cost Analysis** | The economic trade-off tables showing exactly why a particular bay count or close time is recommended. |
+| **Policy Comparison** | Only available when "Compare all scheduling policies" is checked. Side-by-side comparison of all five scheduling orders across every metric. |
+| **Recommendations & Conclusion** | A consolidated summary of all three decisions — bay count, close time, and scheduling policy — with the evidence behind each, in one place. |
+
+---
+
+## Metrics: What Each Number Means
+
+This section explains every metric the simulator produces. Each metric has a plain-English definition, the exact formula used to calculate it, and an explanation of why it matters.
+
+---
+
+### Room Utilization
+
+**Plain English:** What percentage of the time each procedure room was actually in use during its scheduled working hours?
+
+Think of it like a taxi on shift — a taxi with a passenger has 100% utilization; a taxi driving empty or parked has 0%. A room sitting idle between procedures is like a parked taxi: the driver (doctor/nurse) is still getting paid, but no revenue is being generated.
+
+---
+
+#### Cath Lab Utilization (`cath_utilization_avg`)
+
+**Definition:** The fraction of total available Cath room-time that was occupied by a scheduled procedure, averaged across all simulated days.
+
+**Formula:**
+```
+cath_utilization_avg =
+    total minutes of procedures scheduled in Cath rooms (all days combined)
+    ÷
+    total available Cath room-minutes (rooms × shift length, all days combined)
+```
+
+**What "good" looks like:** 70–85% is typically considered healthy. Below 60% suggests the rooms are underused. Above 90% leaves no buffer for emergencies or overruns.
+
+**Why it matters:** The main business case for hiring an additional EP provider depends on demonstrating that the EP rooms will be busy enough to justify the cost. This number is the evidence.
+
+---
+
+#### EP Lab Utilization (`ep_utilization_avg`)
+
+**Definition / Formula:** Identical to Cath utilization, but calculated only for EP rooms and EP providers.
+
+**Why it matters:** Same logic as above. If EP utilization is low under the current setup, adding another provider may not be justified. If it's high, there is a strong case for expansion.
+
+---
+
+#### Mean Room Utilization (`mean_room_utilization`)
+
+**Definition:** The simple average of Cath and EP utilization.
+
+**Formula:**
+```
+mean_room_utilization = (cath_utilization_avg + ep_utilization_avg) / 2
+```
+
+**Why it matters:** Used as a single summary number when comparing scheduling policies. Higher is better.
+
+---
+
+### Overflow (Procedures That Didn't Fit)
+
+**Plain English:** How many procedures could not be started before their room had to close for the day?
+
+Imagine a restaurant that stops seating new customers at 9 PM. If the kitchen is still behind at 9 PM and a table is waiting for their main course, that is an "overflow" — demand that the available time could not accommodate.
+
+---
+
+#### Total Overflow (`overflow_total`)
+
+**Definition:** The number of procedures across all days and all room types that could not be scheduled before the room's closing time.
+
+**Formula:**
+```
+overflow_total = overflowCath + overflowEP + overflowMiddle
+```
+
+| Component | Meaning |
+|-----------|---------|
+| `overflow_cath` | Cath-room procedures that didn't fit |
+| `overflow_ep` | EP-room procedures that didn't fit |
+| `overflow_middle` | Flex-room procedures that didn't fit |
+
+**What causes overflow:** A procedure is counted as overflow when the scheduling algorithm runs out of time in a room's shift before placing all of that day's cases. This happens when earlier procedures run long, or when same-day and emergency cases (which get priority) consume more time than planned.
+
+**Why it matters:** Each overflow event represents a patient whose care was delayed. Reducing overflow is the most direct way to improve patient access and reduce staff overtime.
+
+---
+
+### Crossover Procedures (`crossover_total`)
+
+**Plain English:** How many procedures were done in a room of the "wrong" lab type?
+
+For example, a Cath procedure placed into an EP room when the Cath rooms were all full, or vice versa. This is only possible in a joint lab where some rooms are flexible.
+
+**Formula:**
+```
+crossover_total = cathToEP + epToCath
+```
+
+**Why it matters:** Crossover is actually a sign that the joint lab concept is working — spare capacity in one lab is being used to absorb excess demand from the other. However, it also means nurses and technicians need to be cross-trained in both types of procedure. High crossover numbers strengthen the argument for joint staffing.
+
+---
+
+### Holding Bay (Recovery Space) Metrics
+
+The holding bay is the recovery area where patients spend time before and after their procedure. The simulator tracks how many bays are occupied at every 5-minute interval across the entire day, for every simulated day.
+
+**How occupancy is counted:**
+```
+Patient occupies a bay from:
+  procedure_end_time
+  until:
+  procedure_end_time + recovery_hours + bay_cleaning_time
+```
+
+The simulation window is 40 hours (to catch rare cases where recovery extends past midnight). Occupancy is recorded in 5-minute slots.
+
+---
+
+#### Daily Peak Bay Occupancy (`daily_peak_bays`)
+
+**Plain English:** On each day, what was the maximum number of bays occupied at the same time?
+
+**Formula:**
+```
+daily_peak_bays[day] = highest simultaneous occupancy count recorded that day
+```
+
+**Example:** If at 3:15 PM on a Tuesday there were 12 patients in the holding bay at the same time, that day's peak is 12 — even if the rest of the day was much quieter.
+
+**Why it matters:** This is the number that determines how many bays you actually needed on that day. If the peak ever exceeds the number of bays you built, a bottleneck occurred.
+
+---
+
+#### Overall Peak (`overall_peak_bays`)
+
+**Plain English:** What was the single busiest moment across the entire year?
+
+**Formula:**
+```
+overall_peak_bays = maximum of all daily_peak_bays values
+```
+
+**Why it matters:** This is the worst case. It's useful to know, but sizing the facility to handle the absolute worst day every day would be over-engineering — that worst day may happen only once a year.
+
+---
+
+#### P90 and P95 Daily Peak (`peak_bays_p90`, `peak_bays_p95`)
+
+**Plain English:** What bay count would be enough on 90% (or 95%) of days?
+
+**Formula:**
+```
+Sort all 260 daily peak values from lowest to highest.
+P90 = the value at position 234  (90% of the way through the sorted list)
+P95 = the value at position 247  (95% of the way through the sorted list)
+```
+
+**Example:** If P95 = 14, then on 247 out of 260 simulated days, the peak never exceeded 14 bays. Only the 13 busiest days exceeded it.
+
+**Why P95 is the recommendation threshold:** Building to P95 means the facility handles 95% of all operating days without any bottleneck. The 5% of days that exceed capacity are rare and manageable (e.g., with temporary overflow protocols). Sizing to P90 saves money but accepts more frequent bottlenecks.
+
+---
+
+#### Recommended Bay Count (`recommended_bays_p95`)
+
+**Formula:**
+```
+recommended_bays_p95 = ceiling( peak_bays_p95 )
+```
+
+Ceiling means rounding up to the next whole number, because you cannot build half a bay.
+
+---
+
+#### Daily Last Occupied Time (`daily_last_occupied_hours`)
+
+**Plain English:** What time did the last patient leave the holding bay on each day?
+
+**Formula:**
+```
+Find the last 5-minute slot of the day where any patient was in the bay.
+Convert that slot number to a clock time (hours since midnight).
+```
+
+**Example:** If the last occupied slot was slot 228 (at 5-minute intervals), that is 228 × 5 = 1,140 minutes = 19 hours = 7:00 PM.
+
+**Why it matters:** This tells you when the bay is actually empty — not just when the last procedure ends, but when the last recovering patient has left. This drives the closing time recommendation.
+
+---
+
+#### Recommended Close Time (`recommended_close_p95`)
+
+**Plain English:** On 95% of days, what time is the last patient gone from the holding bay?
+
+**Formula:**
+```
+last_occupied_p95_hours = 95th percentile of all daily_last_occupied_hours values
+recommended_close_p95   = convert to HH:MM format
+```
+
+**Important note:** On rare occasions (when late procedures have very long recovery times), this value can exceed midnight and will be shown as "next day HH:MM". This is not a bug — it reflects real late-ending case days.
+
+**Why it matters:** This is the capacity-based answer to "when can we close?" — derived purely from when patients actually leave, independent of cost. The cost model below may suggest a different closing time based on economic trade-offs.
+
+---
+
+### Close-Time Sensitivity Analysis
+
+**Plain English:** If we close the holding bay at a given time, how many patients would still be in recovery?
+
+For each candidate closing time from 5:00 PM to midnight, the simulator counts:
+
+| Metric | Meaning |
+|--------|---------|
+| `days_with_any_demand_after_close` | How many days per year would still have at least one patient in the bay after this closing time |
+| `total_bay_hours_after_close` | The total "patient-hours" of recovery demand that falls after this closing time, summed across all days |
+| `avg_bay_hours_after_close_per_day` | The average amount of recovery demand left unserved per day at this closing time |
+
+**Why it matters:** These patients do not disappear when the bay "closes." They become inpatient admissions — expensive hospital stays that could have been avoided with a slightly later close time. This table makes that trade-off visible before any decision is made.
+
+---
+
+### Cost Analysis Metrics
+
+All cost figures represent **daily average costs** unless stated otherwise. They are used to find the combination of bay count and close time that minimizes total spending while still meeting patient care standards.
+
+---
+
+#### Cancellation Cost (too few bays)
+
+**Plain English:** How much does it cost per day when the holding bay is full and patients can't enter recovery?
+
+When all bays are occupied and another patient finishes their procedure, the room cannot be turned over — the next scheduled case is delayed or cancelled. Each such delay carries a financial cost in lost revenue and wasted physician time.
+
+**Formula:**
+```
+delay_hours       = (average overcapacity 5-minute slots per day) × 5 min ÷ 60
+cancellation_cost = delay_hours × $600 per hour
+```
+
+The $600/hour figure represents the contribution margin (revenue minus direct costs) lost when a procedure is cancelled or significantly delayed.
+
+---
+
+#### Empty Bay Cost (too many bays)
+
+**Plain English:** How much does it cost per day to have bays that nobody is using?
+
+Built bays still cost money: cleaning supplies, allocated nursing time, equipment maintenance, and overhead. Every hour a bay sits empty is money spent on capacity that isn't generating value.
+
+**Formula:**
+```
+empty_holding_bay_cost = (average idle bay-hours per day) × $10 per hour
+```
+
+---
+
+#### Total Holding Bay Cost
+
+**Plain English:** The combined daily cost at any given bay count — balancing the risk of having too few versus the waste of having too many.
+
+**Formula:**
+```
+total_holding_bay_cost = cancellation_cost + empty_holding_bay_cost
+```
+
+This creates a U-shaped cost curve. The bottom of the U is the cost-minimizing bay count. Building fewer bays than this point makes cancellations expensive enough to outweigh any savings. Building more drives up idle-space costs.
+
+---
+
+#### Service Constraint (the patient-care floor)
+
+**Plain English:** Even if the cost-minimizing bay count is acceptable financially, we also require that the bay is not overwhelmed too often. The constraint is: **no more than 5% of operating days can have any overcapacity event.**
+
+**Formula:**
+```
+pct_days_with_overcapacity = days where peak exceeded bay count ÷ 260 total days
+passes_constraint          = pct_days_with_overcapacity ≤ 5%
+```
+
+**Final bay count recommendation:** The higher of (a) the cost-minimizing count and (b) the minimum count that meets the 5% service constraint. This ensures both financial efficiency and patient care reliability.
+
+---
+
+#### Close Time — Labor Cost
+
+**Plain English:** How much more does it cost in nursing wages for every extra hour the holding bay stays open beyond 5:00 PM?
+
+**Formula:**
+```
+extra_hours          = closing_time − 17:00 (5:00 PM baseline)
+nurses_needed        = round up( average occupancy ÷ 4 )     ← 4 patients per nurse
+surge_nurses         = round up( (P95 occupancy − average) ÷ 4 )  ← for busy days
+
+base_labor_cost      = extra_hours × nurses_needed × $48/hr
+overtime_labor_cost  = extra_hours × surge_nurses × ($48 × 1.5)/hr
+total_labor_cost     = base_labor_cost + overtime_labor_cost
+```
+
+The 4:1 patient-to-nurse ratio is the standard post-procedure staffing ratio. Surge nurses are needed on the 5% of days when occupancy is higher than average — they are paid at the overtime rate.
+
+---
+
+#### Close Time — Admission Cost
+
+**Plain English:** How much does it cost when the bay closes while patients are still recovering?
+
+Patients who haven't finished recovery when the bay closes must be admitted to a regular hospital bed as unplanned inpatients. This costs the hospital approximately $230 per patient in added overhead, bed management, and nursing reallocation.
+
+**Formula:**
+```
+stranded_patients = P95 occupancy at the closing time
+admission_cost    = stranded_patients × $230
+```
+
+**Why P95 and not the average?** We use the 95th-percentile demand to be conservative — we're calculating the cost on a high-demand day, not just an average day.
+
+---
+
+#### Total Close Time Cost
+
+**Plain English:** The combined daily cost of choosing a particular closing time — staffing cost plus admission cost.
+
+**Formula:**
+```
+total_cost = estimated_labor_cost + admission_cost
+```
+
+As closing time moves later: labor cost goes up (more hours, more nurses), admission cost goes down (fewer patients stranded). The recommended closing time is where total cost is lowest.
+
+---
+
+### Policy Ranking
+
+**Plain English:** When comparing all five scheduling policies, which one "wins"?
+
+The policies are ranked using a priority list — like a tiebreaker system in a competition:
+
+| Priority | What is compared | Which is better | Why this order |
+|----------|-----------------|-----------------|----------------|
+| 1st | Total overflow (delayed procedures) | Fewer is better | Patient access comes first |
+| 2nd | P95 peak holding bay count | Fewer is better | Fewer required bays = lower capital and staffing cost |
+| 3rd | P95 last occupied time | Earlier is better | Earlier close = lower labor cost |
+| 4th | Mean room utilization | Higher is better | More productive use of rooms |
+
+The policy with the fewest overflow procedures wins. If two policies tie on overflow, the one requiring fewer holding bays wins. And so on.
+
+---
+
+### Composite Score
+
+**Plain English:** A single 0-to-1 score that summarises how each scheduling policy performs across all metrics at once. Think of it like a school grade: 1.0 is the top of the class, 0.0 is the bottom.
+
+**How it is calculated:**
+
+First, each metric is rescaled so that 1.0 = best policy, 0.0 = worst policy on that metric:
 
 ```
-cancellation_cost = avg overcapacity instances/day × (5 min / 60) × $600/cancellation
-empty_bay_cost    = avg empty bay-hours/day × $10/hour
-total_cost        = cancellation_cost + empty_bay_cost
+For metrics where lower is better (overflow, bay count, close time):
+  score = (worst value − this policy's value) ÷ (worst value − best value)
+
+For metrics where higher is better (utilization):
+  score = (this policy's value − worst value) ÷ (best value − worst value)
+
+If all policies are identical on a metric:
+  score = 1.0 (no difference to distinguish them)
 ```
 
-A **service constraint** also applies: no more than 5% of operating days may have any overcapacity event. The final recommendation is the higher of the cost-minimizing count and the service-constraint minimum.
-
-### Holding bay close time
-For each candidate close time (17:00–24:00):
+Then the composite score is the average of all five rescaled scores:
 
 ```
-base_staff_cost  = incremental hours × ceil(avg occupancy / 4) × $48/hr
-overtime_cost    = incremental hours × ceil((P95 − avg occupancy) / 4) × $72/hr
-admission_cost   = P95 occupancy × $230/admission
-total_cost       = labor_cost + admission_cost
+composite_score = average of (
+  rescaled cath utilization,
+  rescaled EP utilization,
+  rescaled overflow,
+  rescaled P95 peak bays,
+  rescaled P95 close time
+)
 ```
 
-The optimal close time minimizes total cost.
+**Caveat:** All five metrics are weighted equally. If your team cares more about one metric (e.g., patient access = minimise overflow), don't rely only on the composite score — use the performance heatmap in the Policy Comparison tab to apply your own priorities visually.
 
-### Economic assumptions
+---
 
-| Parameter | Value | Role |
-|-----------|-------|------|
-| Lost margin per cancellation | $600 | Penalizes too few bays |
-| Empty bay holding cost | $10/hr | Penalizes too many bays |
-| Max overcapacity days | 5% | Service constraint floor |
-| Patient-to-nurse ratio | 4 : 1 | Staffing calculation |
-| Base nurse wage | $48/hr | Close time labor cost |
-| Overtime multiplier | 1.5× | Late-hour premium |
-| Inpatient admission cost | $230 | Penalizes closing too early |
+## Economic Assumptions at a Glance
+
+| Assumption | Value | What it represents |
+|-----------|-------|-------------------|
+| Lost revenue per cancelled procedure | $600 | Contribution margin lost when a case is cancelled due to no recovery space |
+| Cost of an empty bay-hour | $10/hr | Maintenance, allocated staff time, and overhead for an unused bay |
+| Maximum acceptable overcapacity days | 5% (≈13 days/year) | Patient care quality floor — the facility should handle 95% of days without any bottleneck |
+| Patients per nurse in recovery | 4 : 1 | Standard post-procedure nursing ratio |
+| Base nursing wage | $48/hr | Hourly labor cost for scheduling close-time staffing |
+| Overtime multiplier | 1.5× ($72/hr) | Premium for hours worked beyond standard shift |
+| Unplanned inpatient admission cost | $230 | Marginal cost when a recovery patient is admitted overnight due to early bay closure |
+| Baseline close time reference | 17:00 (5:00 PM) | All incremental labor costs are calculated relative to this starting point |
+| Simulated operating days | 260 days | Standard working-year assumption (5 days/week, 52 weeks) |
+| Occupancy time slot | 5 minutes | Resolution at which bay occupancy is recorded during simulation |
 
 ---
 
@@ -107,142 +526,83 @@ The optimal close time minimizes total cost.
 
 ```
 test-epcath/
-├── app.py                      # Streamlit web app
-├── Simulation.py               # DES engine and priority rule comparison
-├── Params.py                   # Simulation parameters
-├── CostAnalysis.py             # HB count and close-time cost models
-├── VisualizationAnalysis.py    # Chart generation (matplotlib)
-├── EP_CATH_Python_Code_Viz.ipynb  # Google Colab notebook (standalone run)
-├── data/                       # Input CSVs (shift and procedure data)
-└── requirements.txt
+├── app.py                         # The interactive web app (Streamlit)
+├── Simulation.py                  # The simulation engine — runs the day-by-day replay
+├── Params.py                      # All configurable parameters for the simulation
+├── CostAnalysis.py                # The cost calculations (bay count and close time)
+├── VisualizationAnalysis.py       # Chart generation
+├── EP_CATH_Python_Code_Viz.ipynb  # Standalone version that runs in Google Colab
+├── data/                          # Input data files (procedures and provider shifts)
+└── requirements.txt               # Python packages required to run the app
 ```
 
 ---
 
-## How `app.py` Works
+## Technical Reference: How `app.py` Works
+
+> This section is for developers. If you are not modifying the code, you can skip it.
 
 `app.py` is the Streamlit front-end. It is structured in six logical sections:
 
 ### 1. Bootstrap and imports (lines 1–34)
-Before anything else, the script fixes the Python path so that `Simulation`, `Params`, `CostAnalysis`, and `VisualizationAnalysis` can be imported regardless of where Streamlit launches from. It also patches `os.chdir` to prevent Colab-specific directory changes from breaking the app when it runs on Streamlit Cloud. Then it imports all required libraries and project modules.
+Fixes the Python path so all modules can be imported regardless of launch location. Patches `os.chdir` to prevent Colab-specific directory changes from breaking the Streamlit Cloud deployment. Imports all required libraries and project modules.
 
 ### 2. Constants and helpers (lines 36–128)
-Global constants are defined once and reused throughout:
 
 | Constant | Purpose |
 |----------|---------|
-| `SCENARIOS` | Maps human-readable scenario labels to the internal keys used by `Params` |
-| `PRIORITY_RULES` | List of the five scheduling rules shown in the sidebar dropdown |
-| `BG`, `C1`, `C2`, `C3`, `GRID` | Shared color palette for all charts |
+| `SCENARIOS` | Maps human-readable scenario labels to internal keys used by `Params` |
+| `PRIORITY_RULES` | The five scheduling rules shown in the sidebar dropdown |
+| `BG`, `C1`, `C2`, `C3`, `GRID` | Shared dark-theme color palette for all charts |
 | `COST_ASSUMPTIONS` | Cost parameters displayed in the Data Overview tab |
 | `CURRENT_HB_COUNT` | The existing plan's bay count (21), used to mark the cost curve |
 
-Two helper functions keep chart code clean:
-- **`_show_fig(fig)`** — saves any matplotlib figure to a `BytesIO` PNG buffer and renders it with `st.image()`. This avoids the `MediaFileStorageError` that occurs on Streamlit Cloud when `st.pyplot()` is used and the figure is garbage-collected before the browser fetches it.
-- **`_style(ax)`** — applies the shared visual style (background color, grid, spine removal) to any axes object.
+Helper functions:
+- **`_show_fig(fig)`** — saves any matplotlib figure to a `BytesIO` PNG buffer and renders it with `st.image()`, avoiding `MediaFileStorageError` on Streamlit Cloud.
+- **`_style(ax)`** — applies the shared dark visual style to any axes object.
+- **`_fmt_close(t)`** — converts decimal hours to `HH:MM`; displays "next day HH:MM" for values ≥ 24h.
 
-Data loaders are decorated with `@st.cache_data` so they only run once per session:
-- `load_proc_data` / `load_shift_data` — read the CSV input files and add human-readable label columns
-- `get_file_paths` — resolves the correct file paths for the selected scenario
-- `get_baseline_cost_table` — computes the HB cost curve from hardcoded case tables (no simulation needed; visible immediately on page load)
+Data loaders use `@st.cache_data` to run only once per session.
 
 ### 3. Chart functions (lines 135–611)
-All chart functions return a `matplotlib.figure.Figure` and are called with `_show_fig(...)`. They are grouped by purpose:
+All chart functions return `matplotlib.figure.Figure` and are rendered with `_show_fig(...)`.
 
-**Exploratory Data Analysis (EDA)**
-Used in the Data Overview tab. None of these require the simulation to have run.
+**EDA charts** (Data Overview tab — no simulation required):
+`plot_volume_by_lab`, `plot_proc_duration`, `plot_horizon`, `plot_pre_post_times`, `plot_daily_volume`, `plot_provider_workload`, `plot_shift_types`, `plot_shift_load`
 
-| Function | Chart |
-|----------|-------|
-| `plot_volume_by_lab` | Bar: procedure count by Cath vs EP |
-| `plot_proc_duration` | Overlapping histogram: procedure duration distribution |
-| `plot_horizon` | Horizontal bar: scheduling horizon (emergency / same-day / same-week) |
-| `plot_pre_post_times` | Dual histogram: pre- and post-procedure HB times |
-| `plot_daily_volume` | Line chart: daily procedure count over the simulation period |
-| `plot_provider_workload` | Horizontal bar: top 20 providers by volume |
-| `plot_shift_types` | Bar: shift types (full / half / quarter day) |
-| `plot_shift_load` | Line chart: daily provider capacity |
+**Cost context charts** (Data Overview tab):
+`plot_post_time_by_lab`, `plot_hb_demand_by_type`, `plot_cost_curve`
 
-**Cost context**
-Also in the Data Overview tab, these show the economic backdrop before running the simulation.
+**Simulation output charts** (require `summary` dict from `RunSimulation`):
+`plot_hb_peak_distribution`, `plot_close_time_sensitivity`
 
-| Function | Chart |
-|----------|-------|
-| `plot_post_time_by_lab` | Bar: average post-procedure HB recovery time by lab |
-| `plot_hb_demand_by_type` | Horizontal bar: top procedure types by HB recovery time |
-| `plot_cost_curve` | Stacked area + line: daily HB cost vs bay count, marking the current plan and cost-minimizing point |
-
-**Simulation output charts**
-These require simulation results (`summary` dict from `RunSimulation`).
-
-| Function | Chart |
-|----------|-------|
-| `plot_hb_peak_distribution` | Histogram of daily peak HB occupancy with P90/P95 markers |
-| `plot_close_time_sensitivity` | Dual-axis: days with HB demand after close + avg bay-hours after close |
-
-**Policy comparison charts**
-These require the ranked policy results list from `comparePriorityRules`. Each accepts the `policy_results` list (one dict per policy).
-
-| Function | Chart |
-|----------|-------|
-| `plot_policy_utilization` | Grouped bar: Cath and EP utilization per policy |
-| `plot_policy_overflow` | Stacked bar: overflow procedures by room type per policy |
-| `plot_policy_hb_and_close` | Side-by-side horizontal bars: recommended HB count and close hour per policy |
-| `plot_policy_summary_table` | Returns a `DataFrame` for `st.dataframe` (not a chart) |
-| `plot_policy_radar` | Radar/spider chart: 5 policies × 5 normalised KPIs |
-| `plot_policy_heatmap` | Color-coded heatmap: green = better, red = worse per metric |
-| `plot_policy_composite_score` | Horizontal bar: average normalised score across all KPIs |
-
-The helper `_norm(vals, higher_is_better)` min-max normalises a list to [0, 1] and optionally inverts it, so all metrics can be compared on the same scale regardless of direction.
+**Policy comparison charts** (require `policy_results` list from `comparePriorityRules`):
+`plot_policy_utilization`, `plot_policy_overflow`, `plot_policy_hb_and_close`, `plot_policy_summary_table`, `plot_policy_radar`, `plot_policy_heatmap`, `plot_policy_composite_score`
 
 ### 4. Page layout and sidebar (lines 613–650)
-`st.set_page_config` sets the title, icon, and wide layout. The sidebar contains all user controls:
 
-| Control | Effect |
-|---------|--------|
-| Case volume scenario | Selects the input CSV files (historical / high-volume EP / Cath only) |
-| Scheduling priority rule | Sets the sort order for procedures in the single-run simulation |
-| Cath rooms | How many Cath procedure rooms are available |
+| Sidebar control | Effect |
+|-----------------|--------|
+| Case volume scenario | Selects input CSV files (historical / high-volume EP / Cath only) |
+| Scheduling priority rule | Sets procedure sort order for the single-run simulation |
+| Cath rooms | Number of available Cath rooms |
 | Mean HB cleaning time | Average time (hours) to clean a bay between patients |
-| Time resolution | Discretization bin size for the simulation (1, 5, or 10 minutes) |
+| Time resolution | Discretization bin size (1, 5, or 10 minutes) |
 | Random seed | Fixes randomness for reproducibility |
-| Compare all scheduling policies | Runs 5 simulations instead of 1 to populate the Policy Comparison tab |
-| Run Simulation | Triggers the simulation; nothing runs until this is clicked |
+| Compare all scheduling policies | Runs 5 simulations to populate the Policy Comparison tab |
+| Run Simulation | Triggers the simulation |
 
-After the sidebar, the app immediately loads procedure and shift data (always visible, cached) and creates the five tabs.
+### 5. Data Overview tab (always visible)
+Renders without simulation. Shows EDA charts, shift statistics, cost assumptions, HB demand drivers, and baseline cost curve.
 
-### 5. Data Overview tab (always visible, lines 652–760)
-This tab renders without any simulation. It shows EDA charts, shift statistics, cost assumptions, HB demand drivers, and the baseline cost curve. Users can explore the input data and understand the economic model before running anything.
+### 6. Simulation execution and result tabs
+On button click: (1) build `Params` from sidebar values, (2) optionally run `comparePriorityRules`, (3) run `RunSimulation`. Results populate five tabs:
 
-### 6. Simulation execution and result tabs (lines 762–1037)
-If **Run Simulation** has not been clicked, placeholder info messages are shown in all result tabs and execution stops.
-
-When the button is clicked, the app runs inside `st.spinner`:
-
-1. **Build parameters** — `make_params()` constructs a `Params` object from sidebar values
-2. **Policy comparison (optional)** — if the checkbox is ticked, `Simulation.comparePriorityRules()` runs the simulation once per priority rule and returns `{"best": ..., "ranked": [...]}`. The ranked list and best policy dict are stored separately.
-3. **Main simulation** — `Simulation.RunSimulation()` runs the simulation with the user-selected priority rule and returns `(timePeriod, summary)`. The ranked policy list is passed in so `VisualizationAnalysis` can include policy comparison charts if available.
-
-Results populate four tabs:
-
-**Summary tab**
-Key metric cards (recommended bays, utilization, overflow, close time), the HB peak occupancy histogram, an overflow breakdown by room, and the close-time sensitivity chart with a data table.
-
-**Charts tab**
-Calls `VA.build_all_key_figures(summary, policy_results=...)` which returns a dict of named figures. Each figure is rendered with `_show_fig`. If policy results are available, policy comparison charts are included here too.
-
-**Cost Analysis tab**
-Displays the cost tables and recommendations from `summary["cost_analysis"]` — holding bay count (service-constrained vs cost-minimizing) and close time (cost-minimizing).
-
-**Policy Comparison tab**
-Only active when "Compare all scheduling policies" was checked. Shows:
-- A success banner naming the top-ranked policy
-- Composite score bar chart (recommended policy highlighted in blue)
-- Radar/spider chart (normalised KPIs, larger polygon = better)
-- Performance heatmap (green = better per column)
-- Summary table with all KPIs per policy
-- Individual metric breakdowns (utilization, overflow, HB count and close time)
-- Selected-policy detail cards for the currently chosen priority rule
+- **Summary** — key metric cards, HB peak histogram, overflow breakdown, close-time sensitivity chart
+- **Charts** — full figure suite from `VA.build_all_key_figures()`
+- **Cost Analysis** — cost tables and recommendations from `summary["cost_analysis"]`
+- **Policy Comparison** — composite score, radar chart, heatmap, summary table, metric breakdowns (only when policy comparison was run)
+- **Recommendations & Conclusion** — consolidated decision summary for all three planning questions with expandable evidence and a written conclusion
 
 ---
 

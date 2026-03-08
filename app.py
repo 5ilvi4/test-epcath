@@ -775,8 +775,8 @@ proc_df  = load_proc_data(proc_file)
 shift_df = load_shift_data(shift_file)
 cost_table_baseline = get_baseline_cost_table()
 
-tabs = ["Data Overview", "Summary", "Charts", "Cost Analysis", "Policy Comparison"]
-tab_eda, tab_summary, tab_charts, tab_cost, tab_policy = st.tabs(tabs)
+tabs = ["Data Overview", "Summary", "Charts", "Cost Analysis", "Policy Comparison", "Recommendations & Conclusion"]
+tab_eda, tab_summary, tab_charts, tab_cost, tab_policy, tab_conclusion = st.tabs(tabs)
 
 # ── Tab: Data Overview (EDA) ──────────────────────────────────────────────────
 with tab_eda:
@@ -898,6 +898,8 @@ if not run:
         st.info("Click **Run Simulation** in the sidebar to see cost analysis here.")
     with tab_policy:
         st.info("Enable **Compare all scheduling policies** in the sidebar, then click **Run Simulation**.")
+    with tab_conclusion:
+        st.info("Click **Run Simulation** in the sidebar to see the final recommendations and conclusion.")
     st.stop()
 
 # ── run simulation ────────────────────────────────────────────────────────────
@@ -1093,9 +1095,23 @@ with tab_policy:
         # ── visual 1: composite score ──────────────────────────────────────
         st.subheader("Overall Ranking — Composite Score")
         st.caption(
-            "Each metric is normalised 0–1 (best = 1, worst = 0). The composite score is the "
-            "average across all five KPIs: room utilization (×2), overflow, HB peak, close time. "
-            "The blue bar is the recommended policy."
+            "**What it shows:** A single aggregated score per scheduling policy, combining five "
+            "key performance indicators into one number. Each KPI is first min-max normalised "
+            "to a 0–1 scale (1 = best policy on that metric, 0 = worst), then averaged. "
+            "Room utilization is double-weighted because it directly supports the business case "
+            "for hiring an additional EP provider."
+        )
+        st.caption(
+            "**How to read it:** The longer the bar, the better the policy performs overall. "
+            "The blue bar is the top-ranked policy. Bars of similar length mean the policies "
+            "are roughly equivalent — look at the individual breakdowns below to understand "
+            "where differences actually lie."
+        )
+        st.caption(
+            "**Planning implication:** Use this chart to quickly narrow the field. "
+            "If one policy scores meaningfully higher, it is the safest default. "
+            "If scores are close, the heatmap and breakdown charts will show which policy "
+            "is strongest on the metric your team cares most about."
         )
         _show_fig(plot_policy_composite_score(policy_results))
 
@@ -1104,8 +1120,23 @@ with tab_policy:
         # ── visual 2: radar chart ──────────────────────────────────────────
         st.subheader("Multi-Metric Radar Chart")
         st.caption(
-            "Each axis is one KPI, normalised so the outer edge always means 'best on that metric'. "
-            "A policy whose polygon covers the most area performs well across all dimensions simultaneously."
+            "**What it shows:** Five KPIs plotted on five axes radiating from a central point: "
+            "room utilization, procedure overflow (delays), holding bay peak demand, recommended "
+            "holding bay count, and recommended close time. Each axis is normalised so the outer "
+            "edge always means 'best on that metric'. Each policy is drawn as a coloured polygon."
+        )
+        st.caption(
+            "**How to read it:** A larger polygon area means the policy is performing well across "
+            "all five dimensions simultaneously. A polygon that is large on some axes but small "
+            "on others reveals trade-offs — for example, a policy might achieve high utilization "
+            "while also generating more overflow. Polygons that overlap in the centre indicate "
+            "policies with similar strengths and weaknesses."
+        )
+        st.caption(
+            "**Planning implication:** Look for the polygon that is largest and most balanced. "
+            "An ideal policy would fill the chart evenly. If one axis is consistently small across "
+            "all policies, that metric may be hard to improve regardless of scheduling order — "
+            "pointing to a structural constraint rather than a scheduling problem."
         )
         _show_fig(plot_policy_radar(policy_results))
 
@@ -1114,15 +1145,37 @@ with tab_policy:
         # ── visual 3: heatmap ──────────────────────────────────────────────
         st.subheader("Performance Heatmap")
         st.caption(
-            "Green = better, red = worse on each column. Scan each row to see a policy's "
-            "strengths and weaknesses; scan each column to compare policies on one metric."
+            "**What it shows:** A grid of all five policies (rows) against all key metrics "
+            "(columns). Each cell is colour-coded green (better) to red (worse) relative to "
+            "the other policies in that column. The raw value is shown inside each cell."
+        )
+        st.caption(
+            "**How to read it:** Scan across a row to quickly profile one policy — a mostly-green "
+            "row indicates a consistently strong policy, while a row with mixed colours shows "
+            "trade-offs. Scan down a column to compare all policies on a single metric — the "
+            "greenest cell in each column is the best performer for that KPI."
+        )
+        st.caption(
+            "**Planning implication:** This chart is useful when stakeholders have different "
+            "priorities. If minimising overflow is non-negotiable (patient access), focus on "
+            "the Overflow column. If capital cost is the constraint, focus on the HB count column. "
+            "The heatmap lets you apply your own weighting to the decision without re-running "
+            "any calculations."
         )
         _show_fig(plot_policy_heatmap(policy_results))
 
         st.divider()
 
         # ── summary table ─────────────────────────────────────────────────
-        st.subheader("Summary Table")
+        st.subheader("Summary Table — Raw KPI Values")
+        st.caption(
+            "**What it shows:** The underlying numbers behind the charts above — one row per "
+            "policy with the exact values for every KPI. This is the primary reference for "
+            "reporting and for validating the visual summaries. "
+            "**How to read it:** Lower overflow and HB peak are better; higher utilization is better. "
+            "Sort any column by clicking its header to quickly find the top-performing policy "
+            "on a specific metric."
+        )
         policy_df = plot_policy_summary_table(policy_results)
         st.dataframe(policy_df, width='stretch', hide_index=True)
 
@@ -1133,23 +1186,59 @@ with tab_policy:
 
         st.markdown("**Room Utilization by Policy**")
         st.caption(
-            "Higher utilization means the procedure rooms are being used more productively. "
-            "The hospital's goal is sufficient utilization to support hiring an additional EP provider."
+            "**What it shows:** Average Cath and EP room utilization (%) for each scheduling policy. "
+            "Utilization is the fraction of each room's available shift time that is occupied by a "
+            "procedure, including setup and turnover. The two bars per policy show Cath and EP "
+            "separately so you can see whether a scheduling change benefits one lab more than the other."
+        )
+        st.caption(
+            "**Planning implication:** Higher utilization directly supports the financial case for "
+            "adding a new EP provider. A policy that raises EP utilization without significantly "
+            "worsening overflow or holding bay demand is particularly valuable. If all policies "
+            "yield similar utilization, the scheduling rule is not the driver of room efficiency — "
+            "look at room count or shift length instead."
         )
         _show_fig(plot_policy_utilization(policy_results))
 
         st.markdown("**Procedure Delays (Overflow) by Policy**")
         st.caption(
-            "Overflow counts procedures scheduled past the room's closing time — a direct proxy "
-            "for care delays. Fewer overflow procedures means less patient waiting and better "
-            "staff experience."
+            "**What it shows:** The total number of procedures that could not be started before "
+            "the room's scheduled closing time, summed across all simulated days. A procedure "
+            "counted as overflow either ran long into the next shift or had to be rescheduled, "
+            "directly impacting patient access to care."
+        )
+        st.caption(
+            "**How to read it:** Lower bars are better. Even small reductions in overflow can "
+            "represent dozens of avoided delays per year. If one policy produces significantly "
+            "fewer overflow events, it is managing room time more efficiently — fitting more "
+            "procedures into the available hours before closing."
+        )
+        st.caption(
+            "**Planning implication:** If patient access and care delays are the primary concern, "
+            "weight this chart most heavily. Overflow is also a staff experience indicator — "
+            "rooms that routinely run over schedule lead to unpaid overtime and burnout."
         )
         _show_fig(plot_policy_overflow(policy_results))
 
         st.markdown("**Holding Bay Requirements & Close Time by Policy**")
         st.caption(
-            "Different scheduling orders change when patients arrive in recovery. A policy that "
-            "requires fewer bays or an earlier close time reduces capital and staffing costs."
+            "**What it shows:** Two side-by-side charts. Left: the recommended holding bay count "
+            "(P95 of daily peak occupancy) for each policy. Right: the recommended HB close time "
+            "(P95 of the last occupied time each day) for each policy. Both are driven by when "
+            "patients finish their procedures and enter recovery."
+        )
+        st.caption(
+            "**How to read it:** A policy that front-loads longer-recovery procedures means "
+            "those patients cycle through the HB earlier in the day, potentially reducing the "
+            "required bay count and allowing an earlier close time. Conversely, a policy that "
+            "defers long-recovery cases to the afternoon will increase late-day HB demand."
+        )
+        st.caption(
+            "**Planning implication:** Each holding bay is a capital and staffing commitment. "
+            "A policy that requires one fewer bay saves both construction cost and daily nurse "
+            "staffing. A policy that enables an earlier close time saves overtime pay. Use this "
+            "chart to quantify the operational cost impact of the scheduling decision beyond "
+            "just room utilization."
         )
         _show_fig(plot_policy_hb_and_close(policy_results))
 
@@ -1164,3 +1253,232 @@ with tab_policy:
         d3.metric("Overflow procedures", str(summary["overflow_total"]))
         d4.metric("Recommended HB bays", str(summary["holding_bay"]["recommended_bays_p95"]))
         d5.metric("Recommended close",   _fmt_close(summary["holding_bay"]["recommended_close_p95"]))
+
+# ── Tab: Recommendations & Conclusion ─────────────────────────────────────────
+with tab_conclusion:
+    hb      = summary["holding_bay"]
+    ca      = summary.get("cost_analysis", {})
+    hb_ca   = ca.get("hb", {})
+    close_ca = ca.get("close", {})
+
+    hb_service_rec  = hb_ca.get("service_constraint_recommendation", {})
+    hb_cost_rec     = hb_ca.get("cost_recommendation", {})
+    close_cost_rec  = close_ca.get("cost_recommendation", {})
+
+    rec_bays_service = int(hb_service_rec.get("hb_count", hb["recommended_bays_p95"]))
+    rec_bays_cost    = int(hb_cost_rec.get("hb_count", hb["recommended_bays_p95"]))
+    rec_bays_final   = max(rec_bays_service, rec_bays_cost)
+    rec_close_str    = _fmt_close(hb["recommended_close_p95"])
+    rec_close_cost   = str(close_cost_rec.get("close_time_hhmm", "—"))
+    rec_policy       = policy_best["priority_rule"] if policy_best else summary["priority_rule"]
+
+    st.markdown(
+        "This tab consolidates every recommendation produced by the simulation into a single "
+        "decision-ready summary. Each section answers one of the three key planning questions, "
+        "shows the evidence behind the recommendation, and explains the trade-off accepted."
+    )
+
+    # ── Q1: Holding Bay Count ─────────────────────────────────────────────────
+    st.subheader("Decision 1 — How many holding bays are needed?")
+    st.caption(
+        "The holding bay (HB) is the pre/post-procedure recovery space. Too few bays creates "
+        "bottlenecks and forces cancellations; too many wastes capital and nurse staffing budget."
+    )
+
+    r1c1, r1c2, r1c3 = st.columns(3)
+    r1c1.metric(
+        "Current plan",
+        f"{CURRENT_HB_COUNT} bays",
+        help="The existing design assumption being evaluated."
+    )
+    r1c2.metric(
+        "Cost-minimizing recommendation",
+        f"{rec_bays_cost} bays",
+        delta=f"{rec_bays_cost - CURRENT_HB_COUNT:+d} vs current",
+        help="Bay count that minimises combined cancellation cost + idle-bay holding cost."
+    )
+    r1c3.metric(
+        "Service-constrained recommendation",
+        f"{rec_bays_service} bays",
+        delta=f"{rec_bays_service - CURRENT_HB_COUNT:+d} vs current",
+        help="Minimum bays that keep overcapacity days ≤ 5% of all operating days."
+    )
+
+    st.info(
+        f"**Final recommendation: {rec_bays_final} holding bays.** "
+        f"This is the higher of the cost-minimizing count ({rec_bays_cost}) and the service "
+        f"constraint floor ({rec_bays_service}), ensuring that both financial efficiency and "
+        f"patient care reliability are met simultaneously. "
+        + (
+            f"Compared to the current plan of {CURRENT_HB_COUNT} bays, this represents a "
+            f"{'reduction' if rec_bays_final < CURRENT_HB_COUNT else 'increase'} of "
+            f"{abs(rec_bays_final - CURRENT_HB_COUNT)} bay(s)."
+            if rec_bays_final != CURRENT_HB_COUNT else
+            f"The current plan of {CURRENT_HB_COUNT} bays already meets both criteria."
+        )
+    )
+
+    with st.expander("Evidence: P95 daily peak occupancy drives the recommendation"):
+        st.caption(
+            "The chart below shows the distribution of peak simultaneous bay occupancy across "
+            "all simulated days. The P95 marker — the level exceeded on only 5% of days — is "
+            "used as the recommendation. Sizing to the absolute worst case would result in "
+            "chronically empty bays on 95% of days."
+        )
+        _show_fig(plot_hb_peak_distribution(summary))
+
+    if hb_ca.get("cost_table") is not None:
+        with st.expander("Evidence: Cost curve — cancellation cost vs idle-bay cost"):
+            st.caption(
+                "As bay count increases, cancellation cost (too few bays) falls while idle-bay "
+                "holding cost rises. The cost-minimizing point is where total cost is lowest. "
+                "The service constraint floor may push the final recommendation above this point "
+                "to protect patient access on peak days."
+            )
+            _show_fig(VA.plot_hb_total_cost(summary))
+
+    st.divider()
+
+    # ── Q2: Holding Bay Close Time ────────────────────────────────────────────
+    st.subheader("Decision 2 — What time should the holding bay close?")
+    st.caption(
+        "The HB close time determines when nursing staff can end their shift. Closing too early "
+        "strands patients still in recovery and triggers unplanned inpatient admissions. "
+        "Closing too late drives overtime costs."
+    )
+
+    r2c1, r2c2 = st.columns(2)
+    r2c2.metric(
+        "Cost-minimizing close time",
+        rec_close_cost,
+        help="Close time with lowest combined labor + inpatient admission cost."
+    )
+    r2c1.metric(
+        "P95 last occupied time",
+        rec_close_str,
+        help="On 95% of days, all bays are empty by this time — the capacity-driven close time."
+    )
+
+    st.info(
+        f"**Recommendation: close at {rec_close_cost}** based on cost minimisation. "
+        f"The P95 last-occupied time ({rec_close_str}) confirms that the majority of days "
+        f"clear well before this hour. Closing earlier than the P95 time would expose "
+        f"the unit to inpatient admission costs on the busiest 5% of days."
+    )
+
+    with st.expander("Evidence: Close-time sensitivity — demand remaining after close"):
+        st.caption(
+            "Each candidate close time is evaluated for how many days still have patients "
+            "in the HB after that hour, and how many total bay-hours of demand fall outside "
+            "the closing window. Moving close time earlier increases both figures."
+        )
+        _show_fig(plot_close_time_sensitivity(summary))
+
+    if close_ca.get("cost_table") is not None:
+        with st.expander("Evidence: Cost curve — labor vs admission cost by close time"):
+            st.caption(
+                "Later close times raise labor cost (more nurse hours, including overtime) "
+                "but reduce inpatient admission cost (fewer patients stranded without a bay). "
+                "The optimal close time is the crossover point where total cost is minimised."
+            )
+            _show_fig(VA.plot_close_time_total_cost(summary))
+            _show_fig(VA.plot_close_time_cost_components(summary))
+
+    st.divider()
+
+    # ── Q3: Scheduling Priority Rule ─────────────────────────────────────────
+    st.subheader("Decision 3 — Which scheduling priority rule should be adopted?")
+    st.caption(
+        "The scheduling rule determines the order in which procedures are assigned to rooms "
+        "each day. Different orderings change room utilization, patient delays (overflow), "
+        "holding bay demand, and close time — all without adding any resources."
+    )
+
+    if policy_results:
+        _pdf = pd.DataFrame(policy_results)
+        _hb_col = None
+        if "holding_bay" in _pdf.columns:
+            _pdf["_rec_bays"] = _pdf["holding_bay"].apply(lambda x: x.get("recommended_bays_p95", None))
+            _pdf["_close_h"]  = _pdf["holding_bay"].apply(lambda x: x.get("recommended_close_p95", None))
+            _hb_col = "_rec_bays"
+
+        rows_data = []
+        for _, row in _pdf.iterrows():
+            rows_data.append({
+                "Policy":            row["priority_rule"],
+                "Cath util (%)":     f"{row['cath_utilization_avg']*100:.1f}",
+                "EP util (%)":       f"{row['ep_utilization_avg']*100:.1f}",
+                "Overflow":          int(row["overflow_total"]),
+                "Rec. HB bays":      int(row["_rec_bays"]) if _hb_col else "—",
+                "Rec. close time":   _fmt_close(row["_close_h"]) if "_close_h" in row and row["_close_h"] else "—",
+                "Best policy?":      "✓ Recommended" if row["priority_rule"] == rec_policy else "",
+            })
+
+        _summary_df = pd.DataFrame(rows_data)
+        st.dataframe(_summary_df, width="stretch", hide_index=True)
+
+        st.success(
+            f"**Recommended scheduling policy: {rec_policy}**  \n"
+            f"This policy achieved the best composite score across room utilization, "
+            f"procedure overflow, holding bay peak, and close time. "
+            f"It is the single scheduling change that most improves operational efficiency "
+            f"without requiring any additional rooms, staff, or capital investment."
+        )
+
+        with st.expander("Evidence: Policy comparison charts"):
+            st.caption("Composite score, utilization, overflow, and HB demand across all five policies.")
+            _show_fig(plot_policy_composite_score(policy_results))
+            _show_fig(plot_policy_radar(policy_results))
+            _show_fig(plot_policy_heatmap(policy_results))
+    else:
+        st.info(
+            f"Policy comparison was not run. The simulation used **{summary['priority_rule']}**. "
+            "Enable **Compare all scheduling policies** in the sidebar and re-run to see a "
+            "full cross-policy recommendation here."
+        )
+
+    st.divider()
+
+    # ── Final Conclusion ──────────────────────────────────────────────────────
+    st.subheader("Final Conclusion")
+
+    cath_util_pct = round(summary["cath_utilization_avg"] * 100, 1)
+    ep_util_pct   = round(summary["ep_utilization_avg"] * 100, 1)
+    overflow_n    = summary["overflow_total"]
+
+    st.markdown(
+        f"Based on a discrete-event simulation of **{summary.get('total_procs', 7402):,} procedures** "
+        f"drawn from July 2015 EP/CATH case data, the following configuration is recommended "
+        f"for the joint lab:"
+    )
+
+    conc1, conc2, conc3 = st.columns(3)
+    conc1.metric("Holding bay count",    f"{rec_bays_final} bays")
+    conc2.metric("Holding bay close time", rec_close_cost)
+    conc3.metric("Scheduling policy",    rec_policy if policy_best else summary["priority_rule"])
+
+    st.markdown(
+        f"""
+**Holding bays ({rec_bays_final}):** The simulation recorded a P95 daily peak of
+{hb['peak_bays_p95']:.0f} simultaneous bays occupied. Providing {rec_bays_final} bays
+satisfies both the service constraint (≤5% of days with overcapacity) and the
+cost-minimizing criterion, keeping the balance between cancellation risk and idle-space waste.
+
+**Close time ({rec_close_cost}):** This is the cost-minimizing close time, where the sum of
+nurse labor (including overtime) and inpatient admission costs is lowest.
+The P95 last-occupied time of {rec_close_str} confirms the unit naturally clears by this hour
+on the vast majority of operating days.
+
+**Scheduling policy ({rec_policy}):** Of the five priority rules evaluated, this policy
+produced the best overall balance across room utilization (Cath: {cath_util_pct}%,
+EP: {ep_util_pct}%), procedure overflow ({overflow_n} procedures past room closing),
+and holding bay demand. It requires no additional resources — only a change in how
+procedures are ordered each morning.
+        """
+    )
+
+    st.markdown(
+        "**Together, these three changes address the core planning questions: "
+        "right-sizing the recovery space, aligning staffing hours with actual demand, "
+        "and reducing scheduling-driven delays — all derived from real operational data.**"
+    )

@@ -29,14 +29,15 @@ import pandas as pd
 # Palette / theme
 # -----------------------------------------------------------------------------
 
-PRIMARY = "#C0392B"      # recommendation
-SECONDARY = "#C0392B"
-ACCENT = "#3B6EA5"
-BENCHMARK = "#6B7A8F"    # existing plan
-ALTERNATIVE = "#D9DDE3"  # alternatives
-GRID = "#E6E6E6"
-TEXT = "#222222"
-BG = "#F7F5F2"
+PRIMARY = "#5b9bd5"      # recommendation (blue)
+SECONDARY = "#5b9bd5"
+ACCENT = "#5b9bd5"
+BENCHMARK = "#7a8ba0"    # existing plan (muted blue-gray)
+ALTERNATIVE = "#4a5a70"  # alternatives (darker muted)
+GRID = "#2a3547"
+TEXT = "#e2e8f0"
+BG = "#1a2233"
+SUBTEXT = "#7a8ba0"
 
 
 def _style_axes(ax, grid_axis="x"):
@@ -48,8 +49,8 @@ def _style_axes(ax, grid_axis="x"):
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color("#CFCFCF")
-    ax.spines["bottom"].set_color("#CFCFCF")
+    ax.spines["left"].set_color(GRID)
+    ax.spines["bottom"].set_color(GRID)
     ax.tick_params(colors=TEXT, length=0, labelsize=10)
     ax.xaxis.label.set_color(TEXT)
     ax.yaxis.label.set_color(TEXT)
@@ -62,12 +63,12 @@ def _title_block(ax, title, subtitle=None):
             0.0, 1.01, subtitle,
             transform=ax.transAxes,
             ha="left", va="bottom",
-            fontsize=9, color="#555555"
+            fontsize=9, color=SUBTEXT
         )
 
 
 def _source_note(fig, text):
-    fig.text(0.012, 0.012, text, ha="left", va="bottom", fontsize=8, color="#666666")
+    fig.text(0.012, 0.012, text, ha="left", va="bottom", fontsize=8, color=SUBTEXT)
 
 
 # -----------------------------------------------------------------------------
@@ -523,7 +524,7 @@ def plot_option_tradeoff_scatter(options, x_col="overflow_total", y_col="total_c
         else:
             offset = (6, 4)
             fsize = 8.5
-            color = "#777777"
+            color = SUBTEXT
 
         ax.annotate(
             row["display_name"],
@@ -572,7 +573,7 @@ def plot_option_scorecard(options, title=None, subtitle=None, source_note=None):
     width = 0.72 / len(metrics)
     fig, ax = plt.subplots(figsize=(11, 5), facecolor=BG)
 
-    palette = [PRIMARY, ACCENT, BENCHMARK, "#A88E62"]
+    palette = [PRIMARY, "#e07878", BENCHMARK, "#a3c9a8"]
     for i, metric in enumerate(metrics):
         offset = (i - (len(metrics) - 1) / 2.0) * width
         ax.bar([j + offset for j in x], comp[metric], width=width, label=metric, color=palette[i % len(palette)])
@@ -583,7 +584,7 @@ def plot_option_scorecard(options, title=None, subtitle=None, source_note=None):
         subtitle or "Positive values indicate improvement relative to the current plan."
     )
 
-    ax.axhline(0, color="#7A8793", linewidth=1)
+    ax.axhline(0, color=GRID, linewidth=1)
     ax.set_xticks(list(x))
     ax.set_xticklabels(comp["display_name"])
     ax.set_ylabel("Improvement vs existing plan (%)")
