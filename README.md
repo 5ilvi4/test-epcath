@@ -505,6 +505,57 @@ composite_score = average of (
 
 ---
 
+### Multi-Metric Radar Chart (Spider Chart)
+
+**Plain English:** A spider web diagram that shows all five metrics and all five policies on one chart simultaneously — so you can immediately see which policy is strongest overall and exactly where each policy wins or loses.
+
+#### What it looks like
+
+Imagine a spider web. There are 5 "spokes" radiating from the centre, each representing one metric:
+
+- **Cath utilization** — how busy the Cath rooms are
+- **EP utilization** — how busy the EP rooms are
+- **Overflow** — how many procedures didn't fit into the day
+- **HB peak** — how many recovery bays were needed at the busiest moment
+- **Close time** — what time the last patient left recovery
+
+Each scheduling policy is drawn as a coloured polygon connecting its score on each spoke. All five polygons appear on the same chart.
+
+#### How each spoke works
+
+Every spoke runs from **0 at the centre** to **1 at the outer edge**, where **1 always means best on that metric** — regardless of whether the raw number is high or low:
+
+| Metric | What you want | Who scores 1.0 |
+|--------|--------------|----------------|
+| Utilization | Higher is better | Policy with the highest utilization |
+| Overflow | Lower is better | Policy with the fewest delayed procedures |
+| HB peak | Lower is better | Policy needing the fewest recovery bays |
+| Close time | Earlier is better | Policy where the last patient leaves earliest |
+
+This rescaling (min-max normalisation) means you can compare percentages, procedure counts, bay counts, and clock hours all on the same chart — apples to apples.
+
+#### How to read a polygon
+
+- **Point near the outer edge on a spoke** → strong on that metric
+- **Point near the centre on a spoke** → weak on that metric
+- **Large polygon overall** → strong across the board
+- **Lopsided polygon** → excels on some metrics but sacrifices others — a visible trade-off
+- **The ideal policy** would fill the entire chart, touching the outer edge on all five spokes simultaneously
+
+#### Example
+
+Say Policy A (blue) reaches the outer edge on Utilization and Overflow but collapses toward the centre on Close Time. That means:
+- ✓ It keeps rooms busy and avoids delays
+- ✗ But patients are still in recovery late into the evening
+
+Policy B (orange) might have a smaller but more evenly-shaped polygon — not the best at any single metric, but consistently decent across all five. Which is better depends on what the hospital prioritises most.
+
+#### Why no policy fills the whole chart
+
+No policy achieves a perfect pentagon. Improving one metric often worsens another — for example, front-loading long-recovery patients reduces holding bay peak (good) but may push long procedures into the end of the day and increase overflow (bad). The radar chart makes these trade-offs immediately visible, so the planning team can make an informed decision rather than optimising blindly for a single number.
+
+---
+
 ## Economic Assumptions at a Glance
 
 | Assumption | Value | What it represents |

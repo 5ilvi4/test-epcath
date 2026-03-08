@@ -1118,25 +1118,31 @@ with tab_policy:
         st.divider()
 
         # ── visual 2: radar chart ──────────────────────────────────────────
-        st.subheader("Multi-Metric Radar Chart")
+        st.subheader("Multi-Metric Radar Chart (Spider Chart)")
         st.caption(
-            "**What it shows:** Five KPIs plotted on five axes radiating from a central point: "
-            "room utilization, procedure overflow (delays), holding bay peak demand, recommended "
-            "holding bay count, and recommended close time. Each axis is normalised so the outer "
-            "edge always means 'best on that metric'. Each policy is drawn as a coloured polygon."
+            "**What it looks like:** A spider web with 5 spokes radiating from the centre — "
+            "one spoke per metric: Cath utilization, EP utilization, overflow (delays), "
+            "holding bay peak, and close time. Each scheduling policy is drawn as a coloured "
+            "polygon connecting its score on each spoke. All five policies appear on the same chart."
         )
         st.caption(
-            "**How to read it:** A larger polygon area means the policy is performing well across "
-            "all five dimensions simultaneously. A polygon that is large on some axes but small "
-            "on others reveals trade-offs — for example, a policy might achieve high utilization "
-            "while also generating more overflow. Polygons that overlap in the centre indicate "
-            "policies with similar strengths and weaknesses."
+            "**How each spoke works:** Every spoke runs from 0 at the centre to 1 at the outer edge, "
+            "where **1 always means best on that metric** — regardless of whether the raw number is "
+            "high or low. Utilization: higher raw → score 1. Overflow, HB peak, close time: "
+            "lower raw → score 1. This rescaling lets you compare percentages, procedure counts, "
+            "bay counts, and clock hours all on the same chart."
         )
         st.caption(
-            "**Planning implication:** Look for the polygon that is largest and most balanced. "
-            "An ideal policy would fill the chart evenly. If one axis is consistently small across "
-            "all policies, that metric may be hard to improve regardless of scheduling order — "
-            "pointing to a structural constraint rather than a scheduling problem."
+            "**How to read a polygon:** A point near the outer edge = strong on that metric. "
+            "A point near the centre = weak. A large polygon = strong across the board. "
+            "A lopsided polygon = excels on some metrics but sacrifices others — a visible trade-off. "
+            "The ideal policy would fill the entire chart, touching the outer edge on all five spokes."
+        )
+        st.caption(
+            "**Planning implication:** No policy achieves a perfect pentagon — improving one metric "
+            "often worsens another. For example, front-loading long-recovery patients reduces HB peak "
+            "but may increase overflow. Use the radar to see exactly where each policy wins and where "
+            "it gives something up. Then decide based on what your team prioritises most."
         )
         _show_fig(plot_policy_radar(policy_results))
 
