@@ -81,6 +81,14 @@ TEXT = "#e2e8f0"   # light text on dark backgrounds
 
 CURRENT_HB_COUNT = 21   # existing plan bay count
 
+# Default (baseline) parameter values — used to detect when user has changed something
+# and to run a cached baseline simulation for comparison
+BASELINE_SCENARIO_KEY  = "historical"
+BASELINE_PRIORITY_RULE = "historical"
+BASELINE_CATH_ROOMS    = 5
+BASELINE_HB_CLEAN_TIME = 0.10
+BASELINE_RESOLUTION    = 5.0
+
 # Cost assumptions (from CostAnalysis.py)
 COST_ASSUMPTIONS = {
     "Contribution margin lost per cancellation": "$600",
@@ -128,6 +136,88 @@ def _fmt_close(t):
     except Exception:
         return s
 
+def _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies):
+    """Render a compact banner showing the parameters used for the current simulation run."""
+    parts = [
+        f"**Scenario:** {scenario_label}",
+        f"**Priority rule:** {priority_rule}",
+        f"**Cath rooms:** {num_cath_rooms}",
+        f"**HB clean time:** {hb_clean_time:.2f} h",
+        f"**Resolution:** {int(resolution)} min",
+    ]
+    if compare_policies:
+        parts.append("**Policies compared:** all 5")
+    st.caption("Configuration used for this run — " + " · ".join(parts))
+
+
+def _is_baseline_run(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution):
+    return (
+        scenario_key == BASELINE_SCENARIO_KEY
+        and priority_rule == BASELINE_PRIORITY_RULE
+        and num_cath_rooms == BASELINE_CATH_ROOMS
+        and abs(hb_clean_time - BASELINE_HB_CLEAN_TIME) < 0.001
+        and resolution == BASELINE_RESOLUTION
+    )
+
+
+def _show_baseline_comparison(summary, baseline):
+    """Render a compact delta comparison between the current run and the baseline."""
+    hb  = summary["holding_bay"]
+    bhb = baseline["holding_bay"]
+
+    st.markdown("**How this run compares to the default baseline** *(Historical scenario · historical priority · 5 Cath rooms · 0.10 h cleaning · 5 min resolution)*")
+
+    d1, d2, d3 = st.columns(3)
+    hb_delta = hb["recommended_bays_p95"] - bhb["recommended_bays_p95"]
+    d1.metric(
+        "Recommended HB bays",
+        f"{hb['recommended_bays_p95']}",
+        delta=f"{hb_delta:+d} vs baseline ({bhb['recommended_bays_p95']})",
+        delta_color="inverse",  # more bays = more cost = shown in red
+        help="Baseline: historical scenario, historical priority, 5 rooms, 0.10h cleaning, 5 min resolution",
+    )
+
+    cath_delta = round((summary["cath_utilization_avg"] - baseline["cath_utilization_avg"]) * 100, 1)
+    d2.metric(
+        "Cath utilization",
+        f"{round(summary['cath_utilization_avg'] * 100, 1)}%",
+        delta=f"{cath_delta:+.1f}pp vs baseline ({round(baseline['cath_utilization_avg']*100,1)}%)",
+    )
+
+    ep_delta = round((summary["ep_utilization_avg"] - baseline["ep_utilization_avg"]) * 100, 1)
+    d3.metric(
+        "EP utilization",
+        f"{round(summary['ep_utilization_avg'] * 100, 1)}%",
+        delta=f"{ep_delta:+.1f}pp vs baseline ({round(baseline['ep_utilization_avg']*100,1)}%)",
+    )
+
+    d4, d5, d6 = st.columns(3)
+    overflow_delta = summary["overflow_total"] - baseline["overflow_total"]
+    d4.metric(
+        "Overflow procedures",
+        str(summary["overflow_total"]),
+        delta=f"{overflow_delta:+d} vs baseline ({baseline['overflow_total']})",
+        delta_color="inverse",
+    )
+
+    peak_delta = round(hb["peak_bays_p95"] - bhb["peak_bays_p95"], 1)
+    d5.metric(
+        "HB peak P95",
+        f"{hb['peak_bays_p95']:.1f} bays",
+        delta=f"{peak_delta:+.1f} vs baseline ({bhb['peak_bays_p95']:.1f})",
+        delta_color="inverse",
+    )
+
+    close_delta_h = round(hb["last_occupied_p95_hours"] - bhb["last_occupied_p95_hours"], 2)
+    close_sign = "earlier" if close_delta_h < 0 else "later"
+    d6.metric(
+        "Rec. close time (P95)",
+        _fmt_close(hb["recommended_close_p95"]),
+        delta=f"{abs(close_delta_h):.2f} h {close_sign} than baseline ({_fmt_close(bhb['recommended_close_p95'])})",
+        delta_color="inverse" if close_delta_h > 0 else "normal",
+    )
+
+
 def _style(ax, grid_axis="y"):
     ax.set_facecolor(BG)
     ax.grid(axis=grid_axis, color=GRID, linewidth=0.6, alpha=0.8)
@@ -163,6 +253,21 @@ def get_baseline_cost_table():
     """Cost table from hardcoded case data — no simulation needed."""
     overcap_rows, empty_rows, _ = Simulation.buildCostInputsFromCaseTables()
     return compute_hb_cost_table(overcap_rows, empty_rows, params=HoldingBayCostParams())
+
+@st.cache_data
+def get_baseline_simulation_summary():
+    """Run the default configuration once and cache it for comparison."""
+    random.seed(42)
+    p = make_params(
+        BASELINE_SCENARIO_KEY, BASELINE_PRIORITY_RULE,
+        BASELINE_HB_CLEAN_TIME, BASELINE_CATH_ROOMS, BASELINE_RESOLUTION,
+    )
+    _, bsummary = Simulation.RunSimulation(
+        p, saveOutputs=False, printStats=False,
+        printRecommendations=False, showVisualizations=False,
+        policyResults=None,
+    )
+    return bsummary
 
 # ── EDA chart functions ───────────────────────────────────────────────────────
 def plot_volume_by_lab(df):
@@ -755,14 +860,62 @@ st.markdown(
 # ── sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Parameters")
-    scenario_label = st.selectbox("Case volume scenario", list(SCENARIOS.keys()))
-    priority_rule  = st.selectbox("Scheduling priority rule", PRIORITY_RULES)
-    num_cath_rooms = st.slider("Cath rooms", 1, 10, 5)
-    hb_clean_time  = st.slider("Mean HB cleaning time (hours)", 0.01, 1.0, 0.10, step=0.01)
-    resolution     = st.selectbox("Time resolution (minutes)", [1.0, 5.0, 10.0], index=1)
+    scenario_label = st.selectbox(
+        "Case volume scenario", list(SCENARIOS.keys()),
+        help=(
+            "Controls which patient volume dataset is loaded. "
+            "'Historical' uses the base 2015 data. "
+            "'High-volume EP' adds two extra EP providers, raising EP procedure counts and holding bay demand. "
+            "'Cath lab only' removes all EP cases. "
+            "Affects every metric — utilization, overflow, recommended bay count, and close time."
+        ),
+    )
+    priority_rule  = st.selectbox(
+        "Scheduling priority rule", PRIORITY_RULES,
+        help=(
+            "Determines the order in which procedures are assigned to rooms each day. "
+            "Longest first → fills rooms with high-revenue cases early, may reduce overflow. "
+            "Shortest first → more procedures start on time, but room utilization may drop. "
+            "Recovery-time rules push high-HB-demand patients earlier or later in the day, "
+            "directly shifting the peak holding bay occupancy and recommended close time. "
+            "Enable 'Compare all scheduling policies' to see all five rules side by side."
+        ),
+    )
+    num_cath_rooms = st.slider(
+        "Cath rooms", 1, 10, 5,
+        help=(
+            "Number of Cath lab procedure rooms available. "
+            "More rooms raise Cath capacity — reducing overflow for Cath procedures — "
+            "but do not affect EP capacity or holding bay demand directly. "
+            "If Cath utilization is already low, adding rooms will not improve efficiency."
+        ),
+    )
+    hb_clean_time  = st.slider(
+        "Mean HB cleaning time (hours)", 0.01, 1.0, 0.10, step=0.01,
+        help=(
+            "Average time a holding bay is unavailable between patients (cleaning and prep). "
+            "Higher values reduce effective bay throughput: each bay turns over more slowly, "
+            "so peak simultaneous occupancy rises and the recommended bay count increases. "
+            "Lower values allow faster throughput and may reduce the required bay count. "
+            "Default 0.10 h (6 min) reflects typical turnover assumptions."
+        ),
+    )
+    resolution     = st.selectbox(
+        "Time resolution (minutes)", [1.0, 5.0, 10.0], index=1,
+        help=(
+            "Simulation clock tick size. "
+            "1 min → most accurate, slowest (best for final analysis). "
+            "5 min → balanced accuracy and speed (recommended for exploration). "
+            "10 min → fastest, slightly less precise timestamps for close-time and HB peak estimates."
+        ),
+    )
     compare_policies = st.checkbox(
         "Compare all scheduling policies", value=False,
-        help="Runs 5 simulations — takes longer but adds policy comparison charts.",
+        help=(
+            "Runs five simulations — one per priority rule — keeping all other parameters fixed. "
+            "Adds the Policy Comparison tab with radar chart, heatmap, and composite scores. "
+            "Takes roughly 5× longer than a single run."
+        ),
     )
     st.divider()
     run = st.button("Run Simulation", type="primary", width='stretch')
@@ -937,8 +1090,16 @@ with st.spinner("Running simulation... this may take 30-60 seconds."):
 
 st.success("Simulation complete!")
 
+# Load baseline for comparison (cached — runs only once)
+_baseline_is_current = _is_baseline_run(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution)
+try:
+    _baseline_summary = get_baseline_simulation_summary()
+except Exception:
+    _baseline_summary = None
+
 # ── Tab: Summary ──────────────────────────────────────────────────────────────
 with tab_summary:
+    _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
     hb = summary["holding_bay"]
 
     st.subheader("Key Metrics")
@@ -952,6 +1113,15 @@ with tab_summary:
     c4.metric("Procedures scheduled",    f"{summary['procs_placed']} / {summary['total_procs']}")
     c5.metric("Overflow (past closing)", str(summary["overflow_total"]))
     c6.metric("Recommended HB close time", _fmt_close(hb["recommended_close_p95"]))
+
+    st.divider()
+
+    # ── Baseline comparison ────────────────────────────────────────────────
+    if _baseline_summary is not None and not _baseline_is_current:
+        with st.expander("Compare vs default baseline", expanded=True):
+            _show_baseline_comparison(summary, _baseline_summary)
+    elif _baseline_is_current:
+        st.caption("You are running the **default baseline** configuration — no comparison needed.")
 
     st.divider()
 
@@ -1003,6 +1173,7 @@ with tab_summary:
 
 # ── Tab: Charts ───────────────────────────────────────────────────────────────
 with tab_charts:
+    _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
     if "cost_analysis" not in summary:
         st.warning("Cost analysis data unavailable — some charts cannot be generated.")
     else:
@@ -1022,6 +1193,7 @@ with tab_charts:
 
 # ── Tab: Cost Analysis ────────────────────────────────────────────────────────
 with tab_cost:
+    _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
     if "cost_analysis" not in summary:
         st.warning("Cost analysis not available.")
     else:
@@ -1071,6 +1243,7 @@ with tab_cost:
 
 # ── Tab: Policy Comparison ────────────────────────────────────────────────────
 with tab_policy:
+    _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
     if not compare_policies or policy_results is None or policy_best is None:
         st.info(
             "Enable **Compare all scheduling policies** in the sidebar and click "
@@ -1261,6 +1434,7 @@ with tab_policy:
 
 # ── Tab: Recommendations & Conclusion ─────────────────────────────────────────
 with tab_conclusion:
+    _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
     hb      = summary["holding_bay"]
     ca      = summary.get("cost_analysis", {})
     hb_ca   = ca.get("hb", {})
@@ -1441,6 +1615,13 @@ with tab_conclusion:
             "Enable **Compare all scheduling policies** in the sidebar and re-run to see a "
             "full cross-policy recommendation here."
         )
+
+    st.divider()
+
+    # ── Baseline comparison in conclusion tab ─────────────────────────────────
+    if _baseline_summary is not None and not _baseline_is_current:
+        with st.expander("Compare vs default baseline", expanded=False):
+            _show_baseline_comparison(summary, _baseline_summary)
 
     st.divider()
 
