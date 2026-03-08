@@ -21,6 +21,16 @@ import streamlit as st
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+matplotlib.rcParams.update({
+    "text.color":       "#e2e8f0",
+    "axes.labelcolor":  "#e2e8f0",
+    "axes.titlecolor":  "#f1f5f9",
+    "xtick.color":      "#94a3b8",
+    "ytick.color":      "#94a3b8",
+    "legend.facecolor": "#1a2233",
+    "legend.edgecolor": "#2a3547",
+    "legend.labelcolor":"#e2e8f0",
+})
 import pandas as pd
 import numpy as np
 
@@ -62,11 +72,12 @@ HORIZON_MAP = {1: "Emergency", 2: "Same day", 3: "Same week"}
 ROOM_MAP    = {0.0: "Cath only", 1.0: "EP only", 2.0: "Flexible"}
 SHIFT_MAP   = {0.25: "Quarter day", 0.5: "Half day", 1.0: "Full day"}
 
-BG   = "#F7F5F2"
-C1   = "#3B6EA5"
-C2   = "#C0392B"
-C3   = "#6B7A8F"
-GRID = "#E6E6E6"
+BG   = "#1a2233"   # chart face — matches Streamlit secondary bg
+C1   = "#5b9bd5"   # blue
+C2   = "#e07878"   # coral red
+C3   = "#7a8ba0"   # muted slate
+GRID = "#2a3547"   # subtle grid
+TEXT = "#e2e8f0"   # light text on dark backgrounds
 
 CURRENT_HB_COUNT = 21   # existing plan bay count
 
@@ -98,10 +109,10 @@ def _show_fig(fig):
 
 def _style(ax, grid_axis="y"):
     ax.set_facecolor(BG)
-    ax.grid(axis=grid_axis, color=GRID, linewidth=0.7)
+    ax.grid(axis=grid_axis, color=GRID, linewidth=0.6, alpha=0.8)
     ax.set_axisbelow(True)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.spines[["left", "bottom"]].set_color("#CFCFCF")
+    ax.spines[["left", "bottom"]].set_color("#2a3547")
     ax.tick_params(length=0, labelsize=9)
 
 # ── data loaders ──────────────────────────────────────────────────────────────
@@ -353,10 +364,12 @@ def plot_close_time_sensitivity(summary):
     ax2.tick_params(axis="y", labelcolor=C2, length=0, labelsize=9)
     ax1.tick_params(axis="x", length=0, labelsize=9)
     ax1.set_facecolor(BG)
-    ax1.grid(axis="y", color=GRID, linewidth=0.7)
+    ax1.grid(axis="y", color=GRID, linewidth=0.6, alpha=0.8)
     ax1.set_axisbelow(True)
     ax1.spines[["top", "right"]].set_visible(False)
+    ax1.spines[["left", "bottom"]].set_color("#2a3547")
     ax2.spines[["top", "left"]].set_visible(False)
+    ax2.spines[["right", "bottom"]].set_color("#2a3547")
 
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
@@ -498,12 +511,12 @@ def plot_policy_radar(policy_results):
         ax.fill(angles, scores, color=color, alpha=0.12)
 
     ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(categories, fontsize=9, color="#333333")
+    ax.set_xticklabels(categories, fontsize=9, color=TEXT)
     ax.set_yticks([0.25, 0.5, 0.75, 1.0])
-    ax.set_yticklabels(["25%", "50%", "75%", "Best"], fontsize=7, color="#888888")
+    ax.set_yticklabels(["25%", "50%", "75%", "Best"], fontsize=7, color="#7a8ba0")
     ax.set_ylim(0, 1)
-    ax.spines["polar"].set_color("#CFCFCF")
-    ax.grid(color=GRID, linewidth=0.7)
+    ax.spines["polar"].set_color("#2a3547")
+    ax.grid(color=GRID, linewidth=0.6)
     ax.set_title("Policy comparison — normalised KPIs\n(outer edge = best on each metric)",
                  fontsize=11, fontweight="bold", pad=20)
     ax.legend(loc="upper right", bbox_to_anchor=(1.35, 1.1),
@@ -550,7 +563,7 @@ def plot_policy_heatmap(policy_results):
     for row in range(n_policies):
         for col in range(n_metrics):
             brightness = score_matrix[row, col]
-            txt_color = "white" if brightness < 0.35 or brightness > 0.75 else "#333333"
+            txt_color = "white" if brightness < 0.55 else "#1a2233"
             ax.text(col, row, cell_text[row][col],
                     ha="center", va="center", fontsize=9, color=txt_color, fontweight="bold")
 
@@ -616,6 +629,97 @@ st.set_page_config(
     page_icon="🏥",
     layout="wide",
 )
+
+st.markdown("""
+<style>
+/* ── App shell ────────────────────────────────────────────────── */
+.stApp { background-color: #0f1623; }
+
+/* ── Sidebar ─────────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background-color: #131d2e;
+    border-right: 1px solid #1e2e45;
+}
+[data-testid="stSidebar"] .stMarkdown h2,
+[data-testid="stSidebar"] .stMarkdown p { color: #c8d6e5; }
+
+/* ── Metric cards ─────────────────────────────────────────────── */
+[data-testid="metric-container"] {
+    background: #1a2233;
+    border: 1px solid #243048;
+    border-radius: 12px;
+    padding: 18px 20px 14px;
+}
+[data-testid="stMetricValue"] { color: #5b9bd5; font-size: 1.5rem; }
+[data-testid="stMetricLabel"] { color: #94a3b8; font-size: 0.8rem; }
+[data-testid="stMetricDelta"] { font-size: 0.8rem; }
+
+/* ── Tabs ─────────────────────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+    background: #131d2e;
+    border-radius: 10px;
+    padding: 4px 6px;
+    gap: 4px;
+    border: 1px solid #1e2e45;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 8px;
+    color: #7a8ba0;
+    padding: 8px 18px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    border: none;
+}
+.stTabs [aria-selected="true"] {
+    background: #243048 !important;
+    color: #e2e8f0 !important;
+    font-weight: 600;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #3b6fb5 0%, #2a5298 100%);
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    box-shadow: 0 4px 14px rgba(59,111,181,0.4);
+    transition: box-shadow 0.2s;
+}
+.stButton > button[kind="primary"]:hover {
+    box-shadow: 0 6px 20px rgba(59,111,181,0.6);
+}
+
+/* ── Dividers ────────────────────────────────────────────────── */
+hr { border-color: #1e2e45 !important; opacity: 1; }
+
+/* ── Alert / info boxes ───────────────────────────────────────── */
+[data-testid="stAlert"] {
+    border-radius: 10px;
+    border-left-width: 4px;
+}
+
+/* ── DataFrames ──────────────────────────────────────────────── */
+[data-testid="stDataFrame"] {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #243048;
+}
+
+/* ── Images (charts) ─────────────────────────────────────────── */
+[data-testid="stImage"] img {
+    border-radius: 10px;
+    border: 1px solid #243048;
+}
+
+/* ── Spinner text ─────────────────────────────────────────────── */
+[data-testid="stSpinner"] { color: #5b9bd5; }
+
+/* ── Headings ─────────────────────────────────────────────────── */
+h1 { color: #f1f5f9 !important; font-weight: 700; letter-spacing: -0.5px; }
+h2, h3 { color: #cbd5e1 !important; font-weight: 600; }
+</style>
+""", unsafe_allow_html=True)
 
 st.title("EP/CATH Lab Simulation")
 st.markdown(
