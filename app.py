@@ -760,7 +760,6 @@ with st.sidebar:
     num_cath_rooms = st.slider("Cath rooms", 1, 10, 5)
     hb_clean_time  = st.slider("Mean HB cleaning time (hours)", 0.01, 1.0, 0.10, step=0.01)
     resolution     = st.selectbox("Time resolution (minutes)", [1.0, 5.0, 10.0], index=1)
-    random_seed    = st.number_input("Random seed", value=30, min_value=0, step=1)
     compare_policies = st.checkbox(
         "Compare all scheduling policies", value=False,
         help="Runs 5 simulations — takes longer but adds policy comparison charts.",
@@ -904,7 +903,7 @@ if not run:
 
 # ── run simulation ────────────────────────────────────────────────────────────
 with st.spinner("Running simulation... this may take 30-60 seconds."):
-    random.seed(int(random_seed))
+    random.seed(42)
     try:
         p = make_params(scenario_key, priority_rule, hb_clean_time, num_cath_rooms, resolution)
     except Exception as e:
