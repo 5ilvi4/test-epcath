@@ -107,6 +107,27 @@ def _show_fig(fig):
     plt.close(fig)
     st.image(buf)
 
+def _fmt_close(t):
+    """Format a close-time value (string 'HH:MM' or float hours) for display.
+
+    The simulation tracks holding-bay bins up to 40 h past midnight, so the
+    raw P95 last-occupied time can exceed 24:00 when late procedures push
+    recovery into the next calendar day.  We detect that and show it as
+    'next day HH:MM' so planners aren't confused by '31:20'.
+    """
+    if t is None:
+        return "—"
+    s = str(t).strip()
+    try:
+        parts = s.split(":")
+        hh = int(parts[0])
+        mm = int(parts[1]) if len(parts) > 1 else 0
+        if hh >= 24:
+            return f"next day {hh % 24:02d}:{mm:02d}"
+        return f"{hh:02d}:{mm:02d}"
+    except Exception:
+        return s
+
 def _style(ax, grid_axis="y"):
     ax.set_facecolor(BG)
     ax.grid(axis=grid_axis, color=GRID, linewidth=0.6, alpha=0.8)
@@ -440,10 +461,14 @@ def plot_policy_hb_and_close(policy_results):
     ax1.set_xlabel("Holding bays")
     _style(ax1, "x")
 
+    # Convert raw float hours to HH:MM labels (handle cross-midnight values)
+    close_labels = [_fmt_close(f"{int(h)}:{int(round((h % 1) * 60)):02d}") for h in close_h]
     bars2 = ax2.barh(labels, close_h, color=C2, alpha=0.85, height=0.5)
-    ax2.bar_label(bars2, fmt="%.2f hrs", padding=4, fontsize=9)
+    for bar, lbl in zip(bars2, close_labels[::-1]):
+        ax2.text(bar.get_width() + 0.1, bar.get_y() + bar.get_height() / 2,
+                 lbl, va="center", fontsize=9, color=TEXT)
     ax2.set_title("Recommended close time (P95 last occupied)", fontsize=10, fontweight="bold", loc="left")
-    ax2.set_xlabel("Hours (24h clock)")
+    ax2.set_xlabel("Elapsed hours from midnight")
     _style(ax2, "x")
 
     fig.tight_layout()
@@ -464,7 +489,7 @@ def plot_policy_summary_table(policy_results):
             "Overflow (total)":     r["overflow_total"],
             "Recommended HB bays":  hb["recommended_bays_p95"],
             "HB peak P95":          round(hb["peak_bays_p95"], 1),
-            "Rec. close time":      hb["recommended_close_p95"],
+            "Rec. close time":      _fmt_close(hb["recommended_close_p95"]),
         })
     return pd.DataFrame(rows)
 
@@ -925,7 +950,7 @@ with tab_summary:
     c4, c5, c6 = st.columns(3)
     c4.metric("Procedures scheduled",    f"{summary['procs_placed']} / {summary['total_procs']}")
     c5.metric("Overflow (past closing)", str(summary["overflow_total"]))
-    c6.metric("Recommended HB close time", str(hb["recommended_close_p95"]))
+    c6.metric("Recommended HB close time", _fmt_close(hb["recommended_close_p95"]))
 
     st.divider()
 
@@ -1138,4 +1163,4 @@ with tab_policy:
         d2.metric("EP utilization",      f"{round(summary['ep_utilization_avg']*100,1)}%")
         d3.metric("Overflow procedures", str(summary["overflow_total"]))
         d4.metric("Recommended HB bays", str(summary["holding_bay"]["recommended_bays_p95"]))
-        d5.metric("Recommended close",   str(summary["holding_bay"]["recommended_close_p95"]))
+        d5.metric("Recommended close",   _fmt_close(summary["holding_bay"]["recommended_close_p95"]))
