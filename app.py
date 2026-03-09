@@ -466,6 +466,117 @@ def plot_hb_peak_distribution(summary):
     return fig
 
 
+def plot_hb_demand_heatmap(summary, resolution=5):
+    """Heatmap: days × time-of-day, coloured by holding-bay occupancy count."""
+    import numpy as np
+
+    tp   = summary["timePeriod"]
+    bins = tp.bins[2]          # {(day, slot_float): count}
+    days = tp.numDays
+
+    # slot i → minutes from midnight = i * resolution
+    # show 06:00 → 24:00 (the typical operating window)
+    slot_start = int(6 * 60 / resolution)
+    slot_end   = int(24 * 60 / resolution)
+    n_slots    = slot_end - slot_start
+
+    matrix = np.zeros((days, n_slots), dtype=float)
+    for d in range(days):
+        for j, i in enumerate(range(slot_start, slot_end)):
+            matrix[d, j] = bins.get((d, float(i)), 0)
+
+    # x-axis tick labels every hour
+    tick_step   = int(60 / resolution)
+    tick_pos    = list(range(0, n_slots, tick_step))
+    tick_labels = [f"{6 + k}:00" for k in range(len(tick_pos))]
+
+    fig, ax = plt.subplots(figsize=(12, max(4, days * 0.12 + 2)), facecolor=BG)
+    im = ax.imshow(matrix, aspect="auto", cmap="YlOrRd",
+                   interpolation="nearest", origin="upper")
+    cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
+    cbar.set_label("Patients in HB", color=TEXT, fontsize=9)
+    cbar.ax.yaxis.set_tick_params(color=TEXT)
+    plt.setp(cbar.ax.yaxis.get_ticklabels(), color=TEXT)
+
+    ax.set_xticks(tick_pos)
+    ax.set_xticklabels(tick_labels, fontsize=8, color=TEXT)
+    ax.set_ylabel("Simulation day", color=TEXT, fontsize=9)
+    ax.set_xlabel("Time of day", color=TEXT, fontsize=9)
+    ax.tick_params(colors=TEXT)
+    ax.set_title("Holding-bay demand heatmap (patients per 5-min slot)",
+                 fontsize=11, fontweight="bold", loc="left", color=TEXT)
+    ax.set_facecolor(BG)
+    for spine in ax.spines.values():
+        spine.set_edgecolor(TEXT)
+    fig.tight_layout()
+    return fig
+
+
+def plot_room_schedule_heatmap(summary, resolution=5):
+    """Heatmap: rooms × time-of-day, coloured by avg % of days with a procedure in that slot."""
+    import numpy as np
+
+    tp      = summary["timePeriod"]
+    schedules = tp.bins[0]    # {(day, labID, room): Schedule}
+    days      = tp.numDays
+    n_cath    = tp.numCathRooms
+    n_ep      = tp.numEPRooms
+
+    # build list of (labID, room, label)
+    cathID, epID = 0.0, 1.0
+    rooms = [(cathID, r, f"Cath {r+1}") for r in range(n_cath)] + \
+            [(epID,   r, f"EP {r+1}")   for r in range(n_ep)]
+    n_rooms = len(rooms)
+
+    # show 07:00 → 22:00
+    slot_start = (7,  0)
+    slot_end   = (22, 0)
+    minutes_per_slot = resolution
+    start_min  = slot_start[0] * 60 + slot_start[1]
+    end_min    = slot_end[0]   * 60 + slot_end[1]
+    slots      = [(h * 60 + m) for h in range(24) for m in range(0, 60, minutes_per_slot)
+                  if start_min <= h * 60 + m < end_min]
+    slot_keys  = [((s // 60), (s % 60)) for s in slots]
+    n_slots    = len(slots)
+
+    matrix = np.zeros((n_rooms, n_slots), dtype=float)
+    for ri, (lab, room, _) in enumerate(rooms):
+        for si, sk in enumerate(slot_keys):
+            occupied = sum(
+                1 for d in range(days)
+                if (d, lab, room) in schedules
+                and len(schedules[(d, lab, room)].timeSlots.get(sk, [])) > 0
+            )
+            matrix[ri, si] = occupied / days * 100.0   # % of days occupied
+
+    # x-axis tick labels every 2 hours
+    tick_step   = int(120 / resolution)
+    tick_pos    = list(range(0, n_slots, tick_step))
+    tick_labels = [f"{7 + k * 2}:00" for k in range(len(tick_pos))]
+
+    fig, ax = plt.subplots(figsize=(12, max(3, n_rooms * 0.55 + 1.5)), facecolor=BG)
+    im = ax.imshow(matrix, aspect="auto", cmap="Blues",
+                   interpolation="nearest", origin="upper", vmin=0, vmax=100)
+    cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
+    cbar.set_label("% of days occupied", color=TEXT, fontsize=9)
+    cbar.ax.yaxis.set_tick_params(color=TEXT)
+    plt.setp(cbar.ax.yaxis.get_ticklabels(), color=TEXT)
+
+    ax.set_yticks(range(n_rooms))
+    ax.set_yticklabels([r[2] for r in rooms], fontsize=9, color=TEXT)
+    ax.set_xticks(tick_pos)
+    ax.set_xticklabels(tick_labels, fontsize=8, color=TEXT)
+    ax.set_xlabel("Time of day", color=TEXT, fontsize=9)
+    ax.tick_params(colors=TEXT)
+    ax.set_title("Room schedule heatmap (% of simulated days with a procedure in that slot)",
+                 fontsize=11, fontweight="bold", loc="left", color=TEXT)
+    ax.set_facecolor(BG)
+    for spine in ax.spines.values():
+        spine.set_edgecolor(TEXT)
+    fig.tight_layout()
+    return fig
+
+
 def plot_close_time_sensitivity(summary):
     """Dual-axis: days with HB demand after close + avg bay-hours after close."""
     rows = summary["close_time_eval"]
@@ -1090,6 +1201,169 @@ with st.spinner("Running simulation... this may take 30-60 seconds."):
 
 st.success("Simulation complete!")
 
+# ── Per-chart definitions & formulas ──────────────────────────────────────────
+_CHART_META = {
+    "close_time_sensitivity": {
+        "title": "Close-Time Sensitivity — Bay-Hours After Close",
+        "definition": (
+            "Total holding-bay occupancy that would remain **unserved** if the bay closed at each "
+            "candidate time, expressed in bay-hours (one patient in one bay for one hour). "
+            "Higher values mean more patients are still recovering after the candidate close time."
+        ),
+        "formula": (
+            "bay_hours_after_close(T) = Σ_{t > T}  occupancy(t) × (resolution / 60)\n"
+            "where  occupancy(t) = number of patients in the HB at 5-min slot t,\n"
+            "       T             = candidate close time,\n"
+            "       resolution    = 5 min."
+        ),
+    },
+    "close_time_days_with_demand": {
+        "title": "Days With HB Demand After Close",
+        "definition": (
+            "Number of simulated days on which at least one patient was still occupying a holding-bay "
+            "slot after the candidate close time. Even a single occupied slot counts as 'demand after close'."
+        ),
+        "formula": (
+            "days_with_demand(T) = |{ d : ∃ t > T such that occupancy(d, t) > 0 }|\n"
+            "i.e. count days where any slot past time T has non-zero occupancy."
+        ),
+    },
+    "hb_total_cost": {
+        "title": "Holding Bay — Total Daily Cost vs Bay Count",
+        "definition": (
+            "Estimated total daily cost of holding-bay operations at each candidate bay count, "
+            "balancing the cost of turning patients away (too few bays = cancellations) against "
+            "idle capacity (too many bays = empty-bay waste)."
+        ),
+        "formula": (
+            "total_cost = cancellation_cost + empty_bay_cost\n\n"
+            "cancellation_cost  = (avg_overcapacity_5min_blocks/day ÷ 12)  × $600\n"
+            "empty_bay_cost     = avg_empty_bay_hours/day                  × $10\n\n"
+            "Assumptions: $600 contribution margin per cancelled procedure;\n"
+            "             $10 per idle bay-hour."
+        ),
+    },
+    "hb_cost_components": {
+        "title": "Holding Bay — Cost Components vs Bay Count",
+        "definition": (
+            "The two cost components plotted separately so you can see where each bay count "
+            "sits on the cost curve. The optimal count minimises the sum; visually it is near "
+            "where the two curves cross."
+        ),
+        "formula": (
+            "cancellation_cost  = (avg_overcapacity_5min_blocks/day ÷ 12) × $600\n"
+            "empty_bay_cost     = avg_empty_bay_hours/day × $10\n\n"
+            "overcapacity_5min_block = one 5-min interval where demand > available bays;\n"
+            "empty_bay_hour          = one bay-hour with zero occupancy."
+        ),
+    },
+    "hb_service_constraint": {
+        "title": "Holding Bay — Service Constraint (Overcapacity Days)",
+        "definition": (
+            "Number of the 260 simulated operating days on which demand exceeded the available "
+            "bay count at least once. The service constraint requires this to be ≤ 5 % of days "
+            "(≤ 13 days). The minimum bay count that satisfies this is the service-constrained "
+            "recommendation."
+        ),
+        "formula": (
+            "overcapacity_days(N) = |{ d : max_t occupancy(d,t) > N }|\n"
+            "Service constraint:    overcapacity_days(N) / 260  ≤  0.05\n"
+            "Recommendation:        min N such that constraint holds."
+        ),
+    },
+    "close_time_total_cost": {
+        "title": "Close Time — Total Daily Cost vs Close Time",
+        "definition": (
+            "Total estimated daily cost of keeping the holding bay open until each candidate time, "
+            "combining nursing labour (base + overtime) and hospital admission costs for patients "
+            "still in recovery at close."
+        ),
+        "formula": (
+            "total_cost = labor_cost + admission_cost\n\n"
+            "labor_cost     = incremental_hours × ⌈avg_occupancy / 4⌉ × $48       (base)\n"
+            "               + incremental_hours × ⌈extra_p95_patients / 4⌉ × $72  (overtime)\n"
+            "admission_cost = P95_occupancy_at_close × $230\n\n"
+            "Assumptions: 4:1 patient-to-nurse ratio; $48/hr base wage;\n"
+            "             1.5× overtime multiplier ($72/hr); $230 per admission;\n"
+            "             incremental_hours measured from 17:00 baseline."
+        ),
+    },
+    "close_time_cost_components": {
+        "title": "Close Time — Cost Components vs Close Time",
+        "definition": (
+            "Labour and admission costs plotted separately so you can see how each component "
+            "changes with the close time. Labour rises with extra open hours; admissions fall "
+            "as later closes allow more patients to complete recovery."
+        ),
+        "formula": (
+            "Base staff    = ⌈avg_occupancy / 4⌉  nurses  @ $48/hr\n"
+            "Overtime staff= ⌈(P95_occupancy − avg_occupancy) / 4⌉  nurses  @ $72/hr\n"
+            "Admitted pats = P95_occupancy at close time, each costing $230\n\n"
+            "labor_cost     = incremental_hours × (base_staff_cost + overtime_staff_cost)\n"
+            "admission_cost = admitted_pats × $230"
+        ),
+    },
+    "policy_overflow": {
+        "title": "Policy Comparison — Procedure Overflow",
+        "definition": (
+            "Total number of procedures across all simulated days that could not start before "
+            "the room's scheduled closing time under each priority rule. Lower is better."
+        ),
+        "formula": (
+            "overflow_total = |{ p : start_time(p) > room_close_time }|\n"
+            "summed across all procedures p and all simulated days."
+        ),
+    },
+    "policy_utilization": {
+        "title": "Policy Comparison — Room Utilization",
+        "definition": (
+            "Average fraction of each room's prime-time shift hours that was occupied by "
+            "a procedure (including turnover), averaged first across rooms then across all "
+            "simulated days."
+        ),
+        "formula": (
+            "room_util(d, r) = Σ procedure_prime_time_minutes(d,r) / total_prime_time_minutes\n"
+            "lab_util        = mean over all rooms r and days d\n\n"
+            "prime time = shift hours before room_close_time."
+        ),
+    },
+    "policy_hb_peaks": {
+        "title": "Policy Comparison — Recommended HB Bay Count",
+        "definition": (
+            "Recommended number of holding bays for each priority rule, defined as the "
+            "95th-percentile daily peak simultaneous occupancy rounded up to the nearest integer."
+        ),
+        "formula": (
+            "recommended_bays = ⌈P95(daily_peak_bays)⌉\n"
+            "daily_peak_bays(d) = max_t occupancy(d, t)"
+        ),
+    },
+    "policy_close_burden": {
+        "title": "Policy Comparison — Recommended HB Close Time",
+        "definition": (
+            "Recommended holding-bay close time for each priority rule, defined as the "
+            "95th-percentile of the last time slot with any occupancy across all simulated days."
+        ),
+        "formula": (
+            "recommended_close = P95(last_occupied_time_per_day)\n"
+            "last_occupied_time(d) = max{ t : occupancy(d, t) > 0 }"
+        ),
+    },
+    "policy_scorecard": {
+        "title": "Policy Comparison — Scorecard",
+        "definition": (
+            "Each metric is min-max normalised to [0, 1] (1 = best policy on that metric). "
+            "Scores are then averaged across all metrics. Higher composite score = better "
+            "overall policy."
+        ),
+        "formula": (
+            "norm(x, metric) = (x − min_metric) / (max_metric − min_metric)\n"
+            "  flipped for metrics where lower is better (overflow, HB peak, close time)\n\n"
+            "composite_score = mean of normalised scores across all KPIs."
+        ),
+    },
+}
+
 # Load baseline for comparison (cached — runs only once)
 _baseline_is_current = _is_baseline_run(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution)
 try:
@@ -1114,6 +1388,27 @@ with tab_summary:
     c5.metric("Overflow (past closing)", str(summary["overflow_total"]))
     c6.metric("Recommended HB close time", _fmt_close(hb["recommended_close_p95"]))
 
+    with st.expander("📐 Metric definitions & formulas", expanded=False):
+        st.markdown("""
+**Recommended holding bays** — Minimum number of simultaneous bays needed so that peak demand is not exceeded on 95 % of operating days.
+> `recommended_bays = ⌈P95(daily_peak_bays)⌉`
+> `daily_peak_bays(d) = max over all 5-min slots of simultaneous HB occupancy on day d`
+
+**Cath / EP lab utilization** — Fraction of prime-time shift minutes that were occupied by a procedure (including turnover), averaged across rooms and days.
+> `room_util(d,r) = Σ procedure_prime_time_min(d,r) / total_prime_time_min`
+> `lab_util = mean(room_util) across all rooms and simulated days`
+
+**Procedures scheduled** — Count of procedures successfully placed into a room within its shift hours (numerator) out of all procedures in the input data (denominator).
+
+**Overflow (past closing)** — Number of procedures whose scheduled start time fell after the room's closing time, meaning they were delayed or deferred.
+> `overflow = |{ p : start_time(p) > room_close_time }|`
+
+**Recommended HB close time** — Latest time a patient is still in the holding bay, at the 95th percentile across all simulated days.
+> `recommended_close = P95(last_occupied_time_per_day)`
+> `last_occupied_time(d) = latest 5-min slot with occupancy > 0`
+""")
+
+
     st.divider()
 
     # ── Baseline comparison ────────────────────────────────────────────────
@@ -1133,6 +1428,23 @@ with tab_summary:
         "the recommended bay count is sufficient, limiting bottlenecks to ≤5% of operating days."
     )
     _show_fig(plot_hb_peak_distribution(summary))
+
+    with st.expander("📐 Definition & formula", expanded=False):
+        st.markdown("""
+**What is being counted:** For each procedure whose post-procedure time exceeds the minimum threshold, the simulation adds +1 to every 5-min holding-bay slot the patient occupies (both pre- and post-procedure). The peak is the maximum slot value across an entire day.
+
+**Pre-procedure HB window:**
+> `[procStartTime − preTime,  procStartTime + preCleanTime)`
+
+**Post-procedure HB window:**
+> `[procStartTime + procTime_min/60,  procStartTime + procTime_min/60 + postTime + postCleanTime)`
+
+**Daily peak:**
+> `daily_peak(d) = max_t  occupancy(d, t)`
+
+**P95 recommendation:**
+> `recommended_bays = ⌈P95(daily_peak)⌉`
+""")
 
     oh1, oh2, oh3 = st.columns(3)
     oh1.metric("Worst-case peak (all days)", f"{hb['overall_peak_bays']} bays")
@@ -1163,6 +1475,17 @@ with tab_summary:
     )
     _show_fig(plot_close_time_sensitivity(summary))
 
+    with st.expander("📐 Definition & formula", expanded=False):
+        st.markdown("""
+**Bay-hours after close** — Total holding-bay occupancy remaining unserved if the bay closed at each candidate time, expressed in bay-hours.
+> `bay_hours_after_close(T) = Σ_{t > T}  occupancy(t) × (5 min / 60)`
+
+**Days with demand after close** — Number of simulated days where at least one 5-min slot past the candidate close time had non-zero occupancy.
+> `days_with_demand(T) = |{ d : ∃ t > T  such that  occupancy(d,t) > 0 }|`
+
+The table below shows both quantities for each candidate close hour.
+""")
+
     close_df = pd.DataFrame(summary["close_time_eval"]).rename(columns={
         "close_time": "Close time",
         "days_with_any_demand_after_close": "Days with demand after close",
@@ -1184,12 +1507,59 @@ with tab_charts:
                 source_note="Source: EP/CATH simulation based on July 2015 data",
             )
             for name, fig in figs.items():
-                st.subheader(name.replace("_", " ").title())
+                meta = _CHART_META.get(name, {})
+                title = meta.get("title", name.replace("_", " ").title())
+                st.subheader(title)
+                if "definition" in meta:
+                    with st.expander("📐 Definition & formula", expanded=False):
+                        st.markdown(meta["definition"])
+                        if "formula" in meta:
+                            st.code(meta["formula"], language=None)
                 _show_fig(fig)
         except Exception as e:
             st.error(f"Chart generation failed: {e}")
             import traceback
             st.code(traceback.format_exc())
+
+    # ── Heatmaps ──────────────────────────────────────────────────────────────
+    st.divider()
+    st.subheader("Holding-Bay Demand Heatmap")
+    st.caption(
+        "Each row is one simulated day; each column is a 5-minute time slot. "
+        "Colour intensity shows how many patients were in the holding bay during that slot."
+    )
+    with st.expander("📐 Definition & formula", expanded=False):
+        st.markdown("""
+**Holding-bay demand** — number of patients occupying a holding-bay slot at a given 5-minute interval on a given simulated day.
+
+> `demand(day, slot) = bins[2][(day, slot_index)]`
+
+where `slot_index = minutes_from_midnight / resolution` and `resolution = 5 min`.
+Colour scale: light yellow → dark red = low → high occupancy.
+""")
+    try:
+        _show_fig(plot_hb_demand_heatmap(summary, resolution=resolution))
+    except Exception as e:
+        st.error(f"HB demand heatmap failed: {e}")
+
+    st.divider()
+    st.subheader("Room Schedule Heatmap")
+    st.caption(
+        "Each row is one procedure room (Cath or EP); each column is a 5-minute time slot (07:00–22:00). "
+        "Colour shows the percentage of simulated days on which that room had at least one procedure in that slot."
+    )
+    with st.expander("📐 Definition & formula", expanded=False):
+        st.markdown("""
+**Room utilisation per slot** — fraction of simulated days on which a given room had at least one procedure scheduled in the 5-minute window.
+
+> `utilisation%(room, slot) = (# days with procedure in slot) / total_days × 100`
+
+Colour scale: white → dark blue = 0 % → 100 % of days occupied.
+""")
+    try:
+        _show_fig(plot_room_schedule_heatmap(summary, resolution=resolution))
+    except Exception as e:
+        st.error(f"Room schedule heatmap failed: {e}")
 
 # ── Tab: Cost Analysis ────────────────────────────────────────────────────────
 with tab_cost:
@@ -1199,6 +1569,93 @@ with tab_cost:
     else:
         ca = summary["cost_analysis"]
 
+        with st.expander("📋 Cost Model Assumptions & Calculation Overview", expanded=False):
+            st.markdown("""
+### Cost Model Assumptions
+
+| Parameter | Value | Source |
+|---|---|---|
+| Contribution margin per cancelled procedure | $600 | Case assumption |
+| Empty holding-bay cost per idle hour | $10 | Case assumption |
+| Overcapacity block size | 5 min | Simulation resolution |
+| Base nursing wage | $48 / hr | Case assumption |
+| Overtime multiplier | 1.5× ($72 / hr) | Case assumption |
+| Nurse-to-patient ratio | 4 : 1 | Case assumption |
+| Baseline close time (reference) | 17:00 | Case assumption |
+| Inpatient admission cost per stranded patient | $230 | Case assumption |
+| Simulated operating days | 260 | 52 weeks × 5 days |
+
+---
+
+### Holding Bay Cost — Method of Calculation
+
+**Step 1 — Identify overcapacity events**
+For each simulated day *d* and each 5-minute slot *t*, an **overcapacity instance** occurs when:
+```
+occupancy(d, t)  >  bay_count  (N)
+```
+
+**Step 2 — Cancellation cost**
+Each overcapacity 5-minute block represents one procedure that cannot proceed.
+12 blocks = 60 min = 1 hour = 1 procedure slot.
+```
+avg_overcapacity_blocks/day  = Σ_d max(0, peak(d) − N)  /  total_days
+cancellation_cost            = (avg_blocks / 12)  ×  $600
+```
+
+**Step 3 — Empty bay cost**
+For each 5-minute slot where occupancy < bay count, the unused bays are idle:
+```
+empty_bay_hours/day = Σ_{d,t}  max(0, N − occupancy(d,t))  ×  (5/60)  /  total_days
+empty_bay_cost      = empty_bay_hours/day  ×  $10
+```
+
+**Step 4 — Total holding-bay cost**
+```
+total_cost(N) = cancellation_cost(N) + empty_bay_cost(N)
+```
+The **cost-minimizing recommendation** is the *N* with the lowest `total_cost`.
+The **service-constrained recommendation** is the smallest *N* where overcapacity days ≤ 5 % of 260.
+
+---
+
+### Holding Bay Close Time — Method of Calculation
+
+**Step 1 — Incremental hours**
+All costs are measured relative to the 17:00 baseline:
+```
+incremental_hours = close_time_hours − 17.0
+```
+
+**Step 2 — Base nursing labour**
+Staff needed to cover average occupancy under a 4:1 ratio:
+```
+base_staff    = ⌈avg_occupancy_at_close / 4⌉     (rounded up to whole nurses)
+base_cost     = incremental_hours × base_staff × $48
+```
+
+**Step 3 — Overtime nursing labour**
+Additional staff needed for peak (P95) occupancy beyond the average:
+```
+extra_patients     = max(0,  P95_occupancy − avg_occupancy)
+overtime_staff     = ⌈extra_patients / 4⌉
+overtime_cost      = incremental_hours × overtime_staff × $72
+estimated_labor_cost = base_cost + overtime_cost
+```
+
+**Step 4 — Inpatient admission cost**
+Patients still in the bay at close time (P95 scenario) require hospital admission:
+```
+admission_cost = P95_occupancy_at_close × $230
+```
+
+**Step 5 — Total close-time cost**
+```
+total_cost = estimated_labor_cost + admission_cost
+```
+The **cost-minimizing close time** is the candidate time with the lowest `total_cost`.
+""")
+
         st.subheader("Holding Bay Recommendations")
         hb_service = ca["hb"]["service_constraint_recommendation"]
         hb_cost_r  = ca["hb"]["cost_recommendation"]
@@ -1207,6 +1664,19 @@ with tab_cost:
                    help="Minimum bays meeting <=5% overcapacity days constraint")
         cc2.metric("Cost-minimizing recommendation", f"{int(hb_cost_r['hb_count'])} bays",
                    help="Bay count with lowest total cost")
+
+        with st.expander("📐 Definition & formulas", expanded=False):
+            st.markdown("""
+**Service-constrained recommendation** — Smallest bay count where overcapacity (demand > bays) occurs on ≤ 5 % of the 260 simulated operating days.
+> `min N  such that  overcapacity_days(N) / 260  ≤  0.05`
+
+**Cost-minimizing recommendation** — Bay count that minimises total daily holding-bay cost.
+> `total_cost = cancellation_cost + empty_bay_cost`
+> `cancellation_cost = (avg_overcapacity_5min_blocks/day ÷ 12) × $600`
+> `empty_bay_cost    = avg_empty_bay_hours/day × $10`
+
+Parameters: $600 contribution margin per cancelled procedure; $10 per idle bay-hour.
+""")
 
         st.subheader("Holding Bay Cost Table")
         st.dataframe(
@@ -1218,6 +1688,21 @@ with tab_cost:
             }),
             width='stretch',
         )
+        with st.expander("📐 Column definitions", expanded=False):
+            st.markdown("""
+| Column | Meaning | Formula |
+|---|---|---|
+| `hb_count` | Candidate bay count being evaluated | — |
+| `days_with_instances` | Days where peak occupancy exceeded bay count | count of days where `peak(d) > N` |
+| `pct_days_with_instances` | % of 260 days with at least one overcapacity slot | `days_with_instances / 260` |
+| `avg_instances_per_day` | Average number of 5-min overcapacity slots per day | `Σ max(0, peak(d)−N) / 260` |
+| `meets_service_constraint` | True if overcapacity days ≤ 5% (≤ 13 days) | `pct_days ≤ 0.05` |
+| `delay_60min_blocks` | Avg full-hour blocks of overcapacity per day (= avg procedures delayed) | `avg_instances / 12` |
+| `cancellation_cost` | Daily cost of lost procedures due to overcapacity | `delay_60min_blocks × $600` |
+| `avg_daily_empty_hour_blocks` | Average idle bay-hours per day (bays unused) | `Σ max(0, N−occ(d,t)) × (5/60) / 260` |
+| `empty_holding_bay_cost` | Daily cost of idle holding-bay capacity | `avg_daily_empty_hour_blocks × $10` |
+| `total_holding_bay_cost` | Total estimated daily cost | `cancellation_cost + empty_holding_bay_cost` |
+""")
 
         st.divider()
 
@@ -1226,6 +1711,22 @@ with tab_cost:
         cc3, cc4 = st.columns(2)
         cc3.metric("Cost-minimizing close time", str(close_rec["close_time_hhmm"]))
         cc4.metric("Estimated total cost", f"${close_rec['total_cost']:.2f}/day")
+
+        with st.expander("📐 Definition & formulas", expanded=False):
+            st.markdown("""
+**Cost-minimizing close time** — Close time that minimises the sum of nursing labour cost and hospital admission cost.
+> `total_cost = labor_cost + admission_cost`
+
+**Labor cost** (incremental hours beyond 17:00 baseline):
+> `base_staff    = ⌈avg_occupancy / 4⌉  nurses @ $48/hr`
+> `overtime_staff= ⌈(P95_occupancy − avg_occupancy) / 4⌉  nurses @ $72/hr`
+> `labor_cost    = incremental_hours × (base_staff_cost + overtime_staff_cost)`
+
+**Admission cost** (patients still in HB at close must be admitted to hospital):
+> `admission_cost = P95_occupancy_at_close × $230`
+
+Parameters: 4:1 patient-to-nurse ratio; $48/hr base wage; 1.5× overtime; $230/admission; baseline 17:00.
+""")
 
         st.subheader("Close Time Cost Table")
         close_cost_df = ca["close"]["cost_table"][[
@@ -1240,6 +1741,21 @@ with tab_cost:
             }),
             width='stretch',
         )
+        with st.expander("📐 Column definitions", expanded=False):
+            st.markdown("""
+| Column | Meaning | Formula |
+|---|---|---|
+| `close_time_hhmm` | Candidate close time (HH:MM) | — |
+| `incremental_hours` | Extra open hours beyond the 17:00 baseline | `close_hours − 17.0` |
+| `avg_occupancy` | Average patients in HB at close time across all days | simulation mean |
+| `p95_occupancy` | 95th-percentile patients in HB at close time | simulation P95 |
+| `base_staff_rounded` | Nurses needed to cover average occupancy | `⌈avg_occupancy / 4⌉` |
+| `overtime_staff_rounded` | Extra nurses needed for P95 peak above average | `⌈max(0, P95 − avg) / 4⌉` |
+| `estimated_labor_cost` | Total nursing labour cost for incremental hours | `incremental_hrs × (base_staff × $48 + overtime_staff × $72)` |
+| `admitted_patients_95` | Patients still in HB at close under P95 scenario | `p95_occupancy` |
+| `admission_cost` | Cost of admitting stranded patients to hospital | `admitted_patients_95 × $230` |
+| `total_cost` | Total daily cost at this close time | `estimated_labor_cost + admission_cost` |
+""")
 
 # ── Tab: Policy Comparison ────────────────────────────────────────────────────
 with tab_policy:
