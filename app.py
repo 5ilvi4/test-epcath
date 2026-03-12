@@ -22,14 +22,15 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 matplotlib.rcParams.update({
-    "text.color":       "#e2e8f0",
-    "axes.labelcolor":  "#e2e8f0",
-    "axes.titlecolor":  "#f1f5f9",
-    "xtick.color":      "#94a3b8",
-    "ytick.color":      "#94a3b8",
-    "legend.facecolor": "#1a2233",
-    "legend.edgecolor": "#2a3547",
-    "legend.labelcolor":"#e2e8f0",
+    "text.color":           "#e2e8f0",
+    "axes.labelcolor":      "#e2e8f0",
+    "axes.titlecolor":      "#f1f5f9",
+    "xtick.color":          "#94a3b8",
+    "ytick.color":          "#94a3b8",
+    "legend.facecolor":     "#1a2233",
+    "legend.edgecolor":     "#2a3547",
+    "legend.labelcolor":    "#e2e8f0",
+    "figure.max_open_warning": 0,   # suppress batch-creation warning; figures are closed in _show_fig
 })
 import pandas as pd
 import numpy as np
