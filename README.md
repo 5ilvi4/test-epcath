@@ -109,6 +109,8 @@ Every morning, someone decides what order to run the day's procedures. The tool 
 
 Each policy is tested with everything else held equal. The one that produces the fewest delays, lowest peak holding bay demand, and best room efficiency is recommended.
 
+> **Note:** "Compare all scheduling policies" is enabled by default — the app runs all five policies automatically when you click **Run Simulation**.
+
 ---
 
 ### How to read the app
@@ -118,10 +120,10 @@ The app has six tabs:
 | Tab | What you'll find |
 |-----|-----------------|
 | **Data Overview** | Charts about the input data — how many procedures, how long they take, who's working, what recovery times look like. No simulation needed to see this. |
-| **Summary** | After running the simulation: the key numbers at a glance — recommended bay count, room usage rates, number of delayed procedures, recommended closing time. |
-| **Charts** | Detailed charts: cost curves, utilization trends, overflow breakdown, and holding bay demand over time. |
-| **Cost Analysis** | The economic trade-off tables showing exactly why a particular bay count or close time is recommended. |
-| **Policy Comparison** | Only available when "Compare all scheduling policies" is checked. Side-by-side comparison of all five scheduling orders across every metric. |
+| **Summary** | After running the simulation: the key numbers at a glance — recommended bay count, room usage rates, number of delayed procedures, recommended closing time. Each metric has a collapsible `📐 Definition & formula` toggle. |
+| **Charts** | Detailed charts: cost curves, utilization trends, overflow breakdown, holding bay demand over time, plus two heatmaps (HB demand by day/time and room schedule by room/time). Every chart has a `📐 Definition & formula` expander. |
+| **Cost Analysis** | The economic trade-off tables with a full "Cost Model Assumptions & Calculation Overview" at the top, column-level definitions under each table, and the formulas behind every recommendation. |
+| **Policy Comparison** | Side-by-side comparison of all five scheduling orders across every metric — composite score, radar chart, heatmap, and metric breakdowns. Enabled by default. |
 | **Recommendations & Conclusion** | A consolidated summary of all three decisions — bay count, close time, and scheduling policy — with the evidence behind each, in one place. |
 
 ---
@@ -129,6 +131,8 @@ The app has six tabs:
 ## Metrics: What Each Number Means
 
 This section explains every metric the simulator produces. Each metric has a plain-English definition, the exact formula used to calculate it, and an explanation of why it matters.
+
+> **Tip:** Every chart and table inside the app also has a `📐 Definition & formula` expander that you can open for a quick in-context reference.
 
 ---
 
@@ -343,9 +347,40 @@ For each candidate closing time from 5:00 PM to midnight, the simulator counts:
 
 ---
 
+### Heatmaps
+
+Two heatmaps are available in the **Charts** tab after running the simulation.
+
+#### Holding-Bay Demand Heatmap
+
+Each row is one simulated day; each column is a 5-minute time slot (06:00–24:00). Colour intensity shows how many patients were in the holding bay during that slot — light yellow = few patients, dark red = many patients.
+
+**Formula:**
+```
+demand(day, slot) = bins[2][(day, slot_index)]
+where slot_index = minutes_from_midnight / resolution
+```
+
+Use this to spot the time-of-day patterns in HB pressure, and identify whether peak demand is consistently at the same time or scattered across the afternoon.
+
+#### Room Schedule Heatmap
+
+Each row is one procedure room (Cath 1–N or EP 1–N); each column is a 5-minute time slot (07:00–22:00). Colour shows the percentage of simulated days on which that room had at least one procedure scheduled in that slot — white = never used, dark blue = used almost every day.
+
+**Formula:**
+```
+utilisation%(room, slot) = (# days with a procedure in that slot) / total_days × 100
+```
+
+Use this to see which rooms are heavily scheduled and when, and identify rooms or time windows that are underutilised.
+
+---
+
 ### Cost Analysis Metrics
 
 All cost figures represent **daily average costs** unless stated otherwise. They are used to find the combination of bay count and close time that minimizes total spending while still meeting patient care standards.
+
+> **Full calculation walkthrough:** Open the **"Cost Model Assumptions & Calculation Overview"** expander at the top of the Cost Analysis tab for step-by-step formulas and a parameter reference table.
 
 ---
 
@@ -595,10 +630,10 @@ test-epcath/
 
 `app.py` is the Streamlit front-end. It is structured in six logical sections:
 
-### 1. Bootstrap and imports (lines 1–34)
-Fixes the Python path so all modules can be imported regardless of launch location. Patches `os.chdir` to prevent Colab-specific directory changes from breaking the Streamlit Cloud deployment. Imports all required libraries and project modules.
+### 1. Bootstrap and imports
+Fixes the Python path so all modules can be imported regardless of launch location. Patches `os.chdir` to prevent Colab-specific directory changes from breaking the Streamlit Cloud deployment. Imports all required libraries and project modules. Sets `figure.max_open_warning = 0` to suppress batch-creation noise (figures are properly closed in `_show_fig`).
 
-### 2. Constants and helpers (lines 36–128)
+### 2. Constants and helpers
 
 | Constant | Purpose |
 |----------|---------|
@@ -607,15 +642,17 @@ Fixes the Python path so all modules can be imported regardless of launch locati
 | `BG`, `C1`, `C2`, `C3`, `GRID` | Shared dark-theme color palette for all charts |
 | `COST_ASSUMPTIONS` | Cost parameters displayed in the Data Overview tab |
 | `CURRENT_HB_COUNT` | The existing plan's bay count (21), used to mark the cost curve |
+| `_CHART_META` | Dict of title, definition, and formula strings for every chart in the Charts tab |
 
 Helper functions:
-- **`_show_fig(fig)`** — saves any matplotlib figure to a `BytesIO` PNG buffer and renders it with `st.image()`, avoiding `MediaFileStorageError` on Streamlit Cloud.
+- **`_show_fig(fig)`** — saves any matplotlib figure to a `BytesIO` PNG buffer, calls `plt.close(fig)` to free memory, then renders with `st.image()`.
 - **`_style(ax)`** — applies the shared dark visual style to any axes object.
 - **`_fmt_close(t)`** — converts decimal hours to `HH:MM`; displays "next day HH:MM" for values ≥ 24h.
+- **`_cached_simulation(...)`** — `@st.cache_resource` wrapper around `RunSimulation` + `comparePriorityRules`. Results are shared across all concurrent user sessions with identical parameters, preventing duplicate computation and reducing crash risk under load.
 
-Data loaders use `@st.cache_data` to run only once per session.
+Data loaders (`load_proc_data`, `load_shift_data`, `get_baseline_cost_table`, `get_baseline_simulation_summary`) use `@st.cache_data` to run only once per deployment.
 
-### 3. Chart functions (lines 135–611)
+### 3. Chart functions
 All chart functions return `matplotlib.figure.Figure` and are rendered with `_show_fig(...)`.
 
 **EDA charts** (Data Overview tab — no simulation required):
@@ -625,35 +662,44 @@ All chart functions return `matplotlib.figure.Figure` and are rendered with `_sh
 `plot_post_time_by_lab`, `plot_hb_demand_by_type`, `plot_cost_curve`
 
 **Simulation output charts** (require `summary` dict from `RunSimulation`):
-`plot_hb_peak_distribution`, `plot_close_time_sensitivity`
+`plot_hb_peak_distribution`, `plot_close_time_sensitivity`, `plot_hb_demand_heatmap`, `plot_room_schedule_heatmap`
 
 **Policy comparison charts** (require `policy_results` list from `comparePriorityRules`):
 `plot_policy_utilization`, `plot_policy_overflow`, `plot_policy_hb_and_close`, `plot_policy_summary_table`, `plot_policy_radar`, `plot_policy_heatmap`, `plot_policy_composite_score`
 
-### 4. Page layout and sidebar (lines 613–650)
+### 4. Page layout and sidebar
 
-| Sidebar control | Effect |
-|-----------------|--------|
-| Case volume scenario | Selects input CSV files (historical / high-volume EP / Cath only) |
-| Scheduling priority rule | Sets procedure sort order for the single-run simulation |
-| Cath rooms | Number of available Cath rooms |
-| Mean HB cleaning time | Average time (hours) to clean a bay between patients |
-| Time resolution | Discretization bin size (1, 5, or 10 minutes) |
-| Random seed | Fixes randomness for reproducibility |
-| Compare all scheduling policies | Runs 5 simulations to populate the Policy Comparison tab |
-| Run Simulation | Triggers the simulation |
+| Sidebar control | Default | Effect |
+|-----------------|---------|--------|
+| Case volume scenario | Historical | Selects input CSV files |
+| Scheduling priority rule | Historical | Sets procedure sort order for the single-run simulation |
+| Cath rooms | 5 | Number of available Cath rooms (valid range: 4–7) |
+| Mean HB cleaning time | — | Average time (hours) to clean a bay between patients |
+| Time resolution | 5 min | Discretization bin size (1, 5, or 10 minutes) |
+| Compare all scheduling policies | **Checked** | Runs 5 simulations to populate the Policy Comparison tab |
+| Run Simulation | — | Triggers the simulation |
+
+> **Cath room range:** Values below 4 cause a scheduling crash (rooms stack past midnight), and values above 7 exceed the maximum rooms the historical data ever needs. The slider is restricted to 4–7 to prevent invalid states.
 
 ### 5. Data Overview tab (always visible)
 Renders without simulation. Shows EDA charts, shift statistics, cost assumptions, HB demand drivers, and baseline cost curve.
 
 ### 6. Simulation execution and result tabs
-On button click: (1) build `Params` from sidebar values, (2) optionally run `comparePriorityRules`, (3) run `RunSimulation`. Results populate five tabs:
+On button click, `_cached_simulation(...)` is called with the current sidebar parameters. On a cache hit (same parameters already computed), results are returned instantly. On a cache miss, the simulation runs and the result is cached for all future sessions with the same parameters.
 
-- **Summary** — key metric cards, HB peak histogram, overflow breakdown, close-time sensitivity chart
-- **Charts** — full figure suite from `VA.build_all_key_figures()`
-- **Cost Analysis** — cost tables and recommendations from `summary["cost_analysis"]`
-- **Policy Comparison** — composite score, radar chart, heatmap, summary table, metric breakdowns (only when policy comparison was run)
+Results populate five tabs:
+
+- **Summary** — key metric cards with `📐 Definition & formula` expanders, HB peak histogram, overflow breakdown, close-time sensitivity chart
+- **Charts** — full figure suite from `VA.build_all_key_figures()` with per-chart `📐 Definition & formula` expanders, plus HB demand heatmap and room schedule heatmap
+- **Cost Analysis** — "Cost Model Assumptions & Calculation Overview" expander at top, cost tables with column-level `📐 Column definitions` expanders, and recommendation metrics
+- **Policy Comparison** — composite score, radar chart, performance heatmap, summary table, metric breakdowns (always runs when "Compare all scheduling policies" is enabled, which is the default)
 - **Recommendations & Conclusion** — consolidated decision summary for all three planning questions with expandable evidence and a written conclusion
+
+### Concurrency and performance notes
+
+- `@st.cache_resource` is used (not `@st.cache_data`) because `timePeriod` contains custom class instances that should not be pickled/copied. The cached object is shared read-only across sessions.
+- All matplotlib figures are closed immediately after rendering (`plt.close(fig)` inside `_show_fig`) to prevent memory accumulation across Streamlit reruns.
+- The Streamlit Community Cloud free tier provides ~800 MB RAM and 1 shared CPU. If many users run unique parameter combinations simultaneously, resource limits may still be reached. For higher concurrency, consider upgrading to a paid Streamlit tier or deploying on a dedicated VM.
 
 ---
 
