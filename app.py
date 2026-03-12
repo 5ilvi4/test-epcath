@@ -270,6 +270,29 @@ def get_baseline_simulation_summary():
     )
     return bsummary
 
+@st.cache_resource(show_spinner=False)
+def _cached_simulation(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies):
+    """Run simulation once per unique parameter set; result shared across all user sessions."""
+    random.seed(42)
+    p = make_params(scenario_key, priority_rule, hb_clean_time, num_cath_rooms, resolution)
+
+    policy_results, policy_best = None, None
+    if compare_policies:
+        _pr = Simulation.comparePriorityRules(p, saveResults=False)
+        policy_results = _pr["ranked"]
+        policy_best    = _pr["best"]
+
+    timePeriod, summary = Simulation.RunSimulation(
+        p,
+        saveOutputs=False,
+        printStats=False,
+        printRecommendations=False,
+        showVisualizations=False,
+        policyResults=policy_results,
+    )
+    return timePeriod, summary, policy_results, policy_best
+
+
 # ── EDA chart functions ───────────────────────────────────────────────────────
 def plot_volume_by_lab(df):
     counts = df["lab_name"].value_counts()
@@ -1168,31 +1191,9 @@ if not run:
 
 # ── run simulation ────────────────────────────────────────────────────────────
 with st.spinner("Running simulation... this may take 30-60 seconds."):
-    random.seed(42)
     try:
-        p = make_params(scenario_key, priority_rule, hb_clean_time, num_cath_rooms, resolution)
-    except Exception as e:
-        st.error(f"Failed to initialize parameters: {e}")
-        st.stop()
-
-    policy_results = None   # list of ranked policy summaries (or None)
-    policy_best = None      # best policy summary dict (or None)
-    if compare_policies:
-        try:
-            _pr = Simulation.comparePriorityRules(p, saveResults=False)
-            policy_results = _pr["ranked"]
-            policy_best = _pr["best"]
-        except Exception as e:
-            st.warning(f"Policy comparison failed: {e}")
-
-    try:
-        timePeriod, summary = Simulation.RunSimulation(
-            p,
-            saveOutputs=False,
-            printStats=False,
-            printRecommendations=False,
-            showVisualizations=False,
-            policyResults=policy_results,
+        timePeriod, summary, policy_results, policy_best = _cached_simulation(
+            scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies
         )
     except Exception as e:
         st.error(f"Simulation failed: {e}")
