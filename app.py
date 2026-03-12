@@ -1045,7 +1045,7 @@ with st.sidebar:
         ),
     )
     compare_policies = st.checkbox(
-        "Compare all scheduling policies", value=False,
+        "Compare all scheduling policies", value=True,
         help=(
             "Runs five simulations — one per priority rule — keeping all other parameters fixed. "
             "Adds the Policy Comparison tab with radar chart, heatmap, and composite scores. "
