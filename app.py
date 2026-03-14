@@ -282,6 +282,7 @@ def _cached_simulation(scenario_key, priority_rule, num_cath_rooms, hb_clean_tim
         policy_results = _pr["ranked"]
         policy_best    = _pr["best"]
 
+    random.seed(30)
     timePeriod, summary = Simulation.RunSimulation(
         p,
         saveOutputs=False,
