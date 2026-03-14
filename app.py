@@ -2148,9 +2148,11 @@ with tab_conclusion:
     # ── Final Conclusion ──────────────────────────────────────────────────────
     st.subheader("Final Conclusion")
 
-    cath_util_pct = round(summary["cath_utilization_avg"] * 100, 1)
-    ep_util_pct   = round(summary["ep_utilization_avg"] * 100, 1)
-    overflow_n    = summary["overflow_total"]
+    # Use policy comparison results for the recommended policy if available
+    _best_row = next((r for r in (policy_results or []) if r["priority_rule"] == (rec_policy if policy_best else summary["priority_rule"])), None)
+    cath_util_pct = round((_best_row["cath_utilization_avg"] if _best_row else summary["cath_utilization_avg"]) * 100, 1)
+    ep_util_pct   = round((_best_row["ep_utilization_avg"]   if _best_row else summary["ep_utilization_avg"])   * 100, 1)
+    overflow_n    = _best_row["overflow_total"] if _best_row else summary["overflow_total"]
 
     st.markdown(
         f"Based on a discrete-event simulation of **{summary.get('total_procs', 7402):,} procedures** "
