@@ -6,7 +6,7 @@ def timeFormattedFromMinutes(totalMinutes):
     Returns: a tuple containing the hours and minutes equivalent (hours,minutes)
     '''
     minutes = totalMinutes%60
-    hours = (totalMinutes//60)%60
+    hours = (totalMinutes/60)%60
     return (hours,minutes)
 
 def timeFormattedFromHours(totalHours):
