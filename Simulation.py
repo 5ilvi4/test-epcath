@@ -571,6 +571,7 @@ def comparePriorityRules(baseParams, priorities=None, saveResults=False):
 
     for priorityName in priorities:
         print(f"\nTesting: {priorityName}...")
+        random.seed(30)
         p = cloneParams(baseParams)
         applyPriorityRule(p, priorityName)
 
