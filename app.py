@@ -258,7 +258,7 @@ def get_baseline_cost_table():
 @st.cache_data
 def get_baseline_simulation_summary():
     """Run the default configuration once and cache it for comparison."""
-    random.seed(42)
+    random.seed(30)
     p = make_params(
         BASELINE_SCENARIO_KEY, BASELINE_PRIORITY_RULE,
         BASELINE_HB_CLEAN_TIME, BASELINE_CATH_ROOMS, BASELINE_RESOLUTION,
@@ -273,7 +273,7 @@ def get_baseline_simulation_summary():
 @st.cache_resource(show_spinner=False)
 def _cached_simulation(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies):
     """Run simulation once per unique parameter set; result shared across all user sessions."""
-    random.seed(42)
+    random.seed(30)
     p = make_params(scenario_key, priority_rule, hb_clean_time, num_cath_rooms, resolution)
 
     policy_results, policy_best = None, None
