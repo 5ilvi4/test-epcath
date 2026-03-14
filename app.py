@@ -987,6 +987,7 @@ h2, h3 { color: #cbd5e1 !important; font-weight: 600; }
 """, unsafe_allow_html=True)
 
 st.title("EP/CATH Lab Simulation")
+st.caption("v2 — emergency fix applied")
 st.markdown(
     "Explore the underlying procedure and shift data, set parameters, and run the "
     "discrete event simulation to get holding bay sizing and cost recommendations."
