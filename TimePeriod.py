@@ -615,7 +615,7 @@ class TimePeriod:
     def getProcsByMinuteVolume(self,allProcs, params):
         '''
         '''
-        emergencies = [x for x in allProcs if x[params.iSchedHorizon] == 0.0]
+        emergencies = [x for x in allProcs if x[params.iSchedHorizon] == 1.0]
         sameDay = [x for x in allProcs if x[params.iSchedHorizon]==2.0]
         sameWeek = [x for x in allProcs if x[params.iSchedHorizon]==3.0]
 
