@@ -1156,33 +1156,6 @@ with tab_eda:
     with ca2:
         _show_fig(plot_hb_demand_by_type(proc_df))
 
-    st.divider()
-
-    # Current vs recommended cost
-    st.markdown("**Current setup vs cost-minimizing recommendation**")
-    st.caption(
-        "The existing plan uses 21 holding bays. The chart below shows how cost changes "
-        "as bay count varies — too few bays causes cancellations, too many wastes money on idle space."
-    )
-    _show_fig(plot_cost_curve(cost_table_baseline))
-
-    # Savings summary
-    cur_row  = cost_table_baseline[cost_table_baseline["hb_count"] == CURRENT_HB_COUNT]
-    best_row = cost_table_baseline.loc[cost_table_baseline["total_holding_bay_cost"].idxmin()]
-    if not cur_row.empty:
-        cur_cost  = cur_row.iloc[0]["total_holding_bay_cost"]
-        best_cost = best_row["total_holding_bay_cost"]
-        savings_day  = cur_cost - best_cost
-        savings_year = savings_day * 260
-
-        sc1, sc2, sc3 = st.columns(3)
-        sc1.metric("Current plan daily cost (21 bays)", f"${cur_cost:.2f}/day")
-        sc2.metric(
-            f"Cost-minimizing option ({int(best_row['hb_count'])} bays)",
-            f"${best_cost:.2f}/day",
-            delta=f"-${savings_day:.2f}/day vs current",
-        )
-        sc3.metric("Estimated annual savings", f"${savings_year:,.0f}/year")
 
 # ── simulation result tabs ────────────────────────────────────────────────────
 if not run:
@@ -1462,10 +1435,20 @@ with tab_overflow:
 > `overflow = |{ p : start_time(p) > room_close_time }|`
 """)
 
+    # Overflow vs HB demand
+    st.divider()
+    st.subheader("Overflow & Holding Bay Demand")
+    st.caption(
+        "Overflow and HB peak are closely linked — procedures that overflow (run late) continue "
+        "occupying holding-bay slots longer, driving up peak demand. This histogram shows the "
+        "distribution of daily HB peak occupancy."
+    )
+    _show_fig(plot_hb_peak_distribution(summary))
+
     if compare_policies and policy_results:
         st.divider()
         try:
-            for key in ["policy_overflow", "policy_utilization"]:
+            for key in ["policy_overflow", "policy_hb_peaks", "policy_utilization"]:
                 fig = getattr(VA, f"plot_{key}")(policy_results)
                 meta = _CHART_META.get(key, {})
                 st.subheader(meta.get("title", key))
@@ -1606,6 +1589,30 @@ with tab_mincost:
         cc2.metric("Service-constrained bay count", f"{int(hb_service['hb_count'])} bays",
                    help="Minimum bays meeting ≤5% overcapacity days")
         cc3.metric("Min estimated total cost", f"${close_rec['total_cost']:.2f}/day")
+
+        # Current setup vs cost-minimizing recommendation
+        st.divider()
+        st.subheader("Current Setup vs Cost-Minimizing Recommendation")
+        st.caption(
+            "The existing plan uses 21 holding bays. The chart below shows how cost changes "
+            "as bay count varies — too few bays causes cancellations, too many wastes money on idle space."
+        )
+        _show_fig(plot_cost_curve(cost_table_baseline))
+        cur_row  = cost_table_baseline[cost_table_baseline["hb_count"] == CURRENT_HB_COUNT]
+        best_row = cost_table_baseline.loc[cost_table_baseline["total_holding_bay_cost"].idxmin()]
+        if not cur_row.empty:
+            cur_cost     = cur_row.iloc[0]["total_holding_bay_cost"]
+            best_cost    = best_row["total_holding_bay_cost"]
+            savings_day  = cur_cost - best_cost
+            savings_year = savings_day * 260
+            sc1, sc2, sc3 = st.columns(3)
+            sc1.metric("Current plan daily cost (21 bays)", f"${cur_cost:.2f}/day")
+            sc2.metric(
+                f"Cost-minimizing option ({int(best_row['hb_count'])} bays)",
+                f"${best_cost:.2f}/day",
+                delta=f"-${savings_day:.2f}/day vs current",
+            )
+            sc3.metric("Estimated annual savings", f"${savings_year:,.0f}/year")
 
         with st.expander("📋 Cost Model Assumptions", expanded=False):
             st.markdown("""
