@@ -271,7 +271,7 @@ def get_baseline_simulation_summary():
     return bsummary
 
 @st.cache_resource(show_spinner=False)
-def _cached_simulation(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=7):
+def _cached_simulation(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=8):
     """Run simulation once per unique parameter set; result shared across all user sessions."""
     random.seed(30)
     p = make_params(scenario_key, priority_rule, hb_clean_time, num_cath_rooms, resolution)
@@ -1199,7 +1199,7 @@ if not run:
 with st.spinner("Running simulation... this may take 30-60 seconds."):
     try:
         timePeriod, summary, policy_results, policy_best = _cached_simulation(
-            scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=7
+            scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=8
         )
     except Exception as e:
         st.error(f"Simulation failed: {e}")

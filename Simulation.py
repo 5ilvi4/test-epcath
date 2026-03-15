@@ -986,7 +986,7 @@ def buildCostInputsFromSimulation(timePeriod, p):
         p95_occ = percentile(occupancy_after, 95) if occupancy_after else 0
         
         close_rows.append({
-            "close_time": f"{close_hour % 24}:00",
+            "close_time": f"{close_hour}:00",
             "avg_occupancy": avg_occ,
             "p95_occupancy": p95_occ
         })
