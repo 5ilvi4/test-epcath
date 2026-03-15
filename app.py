@@ -1841,14 +1841,14 @@ with tab_policy:
         st.divider()
 
         # ── current run detail ─────────────────────────────────────────────
-        st.subheader("Selected Policy Detail")
-        st.caption(f"Results for the currently selected policy: **{summary['priority_rule']}**")
+        st.subheader("Recommended Policy Detail")
+        st.caption(f"Results for the top-ranked policy: **{policy_best['priority_rule']}**")
         d1, d2, d3, d4, d5 = st.columns(5)
-        d1.metric("Cath utilization",    f"{round(summary['cath_utilization_avg']*100,1)}%")
-        d2.metric("EP utilization",      f"{round(summary['ep_utilization_avg']*100,1)}%")
-        d3.metric("Overflow procedures", str(summary["overflow_total"]))
-        d4.metric("Recommended HB bays", str(summary["holding_bay"]["recommended_bays_p95"]))
-        d5.metric("Recommended close",   _fmt_close(summary["holding_bay"]["recommended_close_p95"]))
+        d1.metric("Cath utilization",    f"{round(policy_best['cath_utilization_avg']*100,1)}%")
+        d2.metric("EP utilization",      f"{round(policy_best['ep_utilization_avg']*100,1)}%")
+        d3.metric("Overflow procedures", str(policy_best["overflow_total"]))
+        d4.metric("Recommended HB bays", str(policy_best["holding_bay"]["recommended_bays_p95"]))
+        d5.metric("Recommended close",   _fmt_close(policy_best["holding_bay"]["recommended_close_p95"]))
 
 # ── Tab: Recommendations & Conclusion ─────────────────────────────────────────
 with tab_conclusion:
