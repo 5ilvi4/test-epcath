@@ -122,10 +122,17 @@ def _fmt_close(t):
     The simulation tracks holding-bay bins up to 40 h past midnight, so the
     raw P95 last-occupied time can exceed 24:00 when late procedures push
     recovery into the next calendar day.  We detect that and show it as
-    'next day HH:MM' so planners aren't confused by '31:20'.
+    'next day HH:MM' so planners aren't confused by '31:20' or '36.83'.
     """
     if t is None:
         return "—"
+    # Handle float/int hours directly (e.g. 36.833 → next day 12:50)
+    if isinstance(t, (int, float)):
+        total = int(round(float(t) * 60))
+        hh, mm = total // 60, total % 60
+        if hh >= 24:
+            return f"next day {hh % 24:02d}:{mm:02d}"
+        return f"{hh:02d}:{mm:02d}"
     s = str(t).strip()
     try:
         parts = s.split(":")
@@ -708,13 +715,15 @@ def plot_policy_hb_and_close(policy_results):
     _style(ax1, "x")
 
     # Convert raw float hours to HH:MM labels (handle cross-midnight values)
-    close_labels = [_fmt_close(f"{int(h)}:{int(round((h % 1) * 60)):02d}") for h in close_h]
+    close_labels = [_fmt_close(h) for h in close_h]
     bars2 = ax2.barh(labels, close_h, color=C2, alpha=0.85, height=0.5)
     for bar, lbl in zip(bars2, close_labels[::-1]):
         ax2.text(bar.get_width() + 0.1, bar.get_y() + bar.get_height() / 2,
                  lbl, va="center", fontsize=9, color=TEXT)
     ax2.set_title("Recommended close time (P95 last occupied)", fontsize=10, fontweight="bold", loc="left")
-    ax2.set_xlabel("Elapsed hours from midnight")
+    ax2.set_xlabel("Time of day")
+    from matplotlib.ticker import FuncFormatter
+    ax2.xaxis.set_major_formatter(FuncFormatter(lambda x, _: _fmt_close(x)))
     _style(ax2, "x")
 
     fig.tight_layout()
@@ -1423,11 +1432,13 @@ with tab_overflow:
         "before the room's scheduled closing time — a direct measure of scheduling delays and care access."
     )
 
-    ov1, ov2, ov3, ov4 = st.columns(4)
+    ov1, ov2, ov3, ov4, ov5 = st.columns(5)
     ov1.metric("Total overflow",      str(summary["overflow_total"]))
     ov2.metric("Cath overflow",       str(summary.get("overflow_cath", "—")))
     ov3.metric("EP overflow",         str(summary.get("overflow_ep", "—")))
     ov4.metric("Flex room overflow",  str(summary.get("overflow_middle", "—")))
+    ov5.metric("Recommended HB bays", f"{hb['recommended_bays_p95']} bays",
+               help="HB peak P95 — bays needed to absorb overflow demand")
 
     with st.expander("📐 Definition & formula", expanded=False):
         st.markdown("""
@@ -1448,7 +1459,7 @@ with tab_overflow:
     if compare_policies and policy_results:
         st.divider()
         try:
-            for key in ["policy_overflow", "policy_hb_peaks", "policy_utilization"]:
+            for key in ["policy_overflow", "policy_hb_peaks"]:
                 fig = getattr(VA, f"plot_{key}")(policy_results)
                 meta = _CHART_META.get(key, {})
                 st.subheader(meta.get("title", key))
