@@ -1071,8 +1071,8 @@ proc_df  = load_proc_data(proc_file)
 shift_df = load_shift_data(shift_file)
 cost_table_baseline = get_baseline_cost_table()
 
-tabs = ["Data Overview", "Summary", "Charts", "Cost Analysis", "Policy Comparison", "Recommendations & Conclusion"]
-tab_eda, tab_summary, tab_charts, tab_cost, tab_policy, tab_conclusion = st.tabs(tabs)
+tabs = ["Data Overview", "HB Peak P95", "Overflow", "Close hr P95", "Min Cost", "Policy Comparison", "Recommendations & Conclusion"]
+tab_eda, tab_hb, tab_overflow, tab_close, tab_mincost, tab_policy, tab_conclusion = st.tabs(tabs)
 
 # ── Tab: Data Overview (EDA) ──────────────────────────────────────────────────
 with tab_eda:
@@ -1186,12 +1186,14 @@ with tab_eda:
 
 # ── simulation result tabs ────────────────────────────────────────────────────
 if not run:
-    with tab_summary:
+    with tab_hb:
         st.info("Click **Run Simulation** in the sidebar to see results here.")
-    with tab_charts:
-        st.info("Click **Run Simulation** in the sidebar to see charts here.")
-    with tab_cost:
-        st.info("Click **Run Simulation** in the sidebar to see cost analysis here.")
+    with tab_overflow:
+        st.info("Click **Run Simulation** in the sidebar to see results here.")
+    with tab_close:
+        st.info("Click **Run Simulation** in the sidebar to see results here.")
+    with tab_mincost:
+        st.info("Click **Run Simulation** in the sidebar to see results here.")
     with tab_policy:
         st.info("Enable **Compare all scheduling policies** in the sidebar, then click **Run Simulation**.")
     with tab_conclusion:
@@ -1369,62 +1371,23 @@ try:
 except Exception:
     _baseline_summary = None
 
-# ── Tab: Summary ──────────────────────────────────────────────────────────────
-with tab_summary:
+# ── Tab: HB Peak P95 ──────────────────────────────────────────────────────────
+with tab_hb:
     _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
     hb = summary["holding_bay"]
 
-    st.subheader("Key Metrics")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Recommended holding bays", f"{hb['recommended_bays_p95']} bays",
-              help="95th percentile daily peak")
-    c2.metric("Cath lab utilization", f"{round(summary['cath_utilization_avg'] * 100, 1)}%")
-    c3.metric("EP lab utilization",   f"{round(summary['ep_utilization_avg'] * 100, 1)}%")
-
-    c4, c5, c6 = st.columns(3)
-    c4.metric("Procedures scheduled",    f"{summary['procs_placed']} / {summary['total_procs']}")
-    c5.metric("Overflow (past closing)", str(summary["overflow_total"]))
-    c6.metric("Recommended HB close time", _fmt_close(hb["recommended_close_p95"]))
-
-    with st.expander("📐 Metric definitions & formulas", expanded=False):
-        st.markdown("""
-**Recommended holding bays** — Minimum number of simultaneous bays needed so that peak demand is not exceeded on 95 % of operating days.
-> `recommended_bays = ⌈P95(daily_peak_bays)⌉`
-> `daily_peak_bays(d) = max over all 5-min slots of simultaneous HB occupancy on day d`
-
-**Cath / EP lab utilization** — Fraction of prime-time shift minutes that were occupied by a procedure (including turnover), averaged across rooms and days.
-> `room_util(d,r) = Σ procedure_prime_time_min(d,r) / total_prime_time_min`
-> `lab_util = mean(room_util) across all rooms and simulated days`
-
-**Procedures scheduled** — Count of procedures successfully placed into a room within its shift hours (numerator) out of all procedures in the input data (denominator).
-
-**Overflow (past closing)** — Number of procedures whose scheduled start time fell after the room's closing time, meaning they were delayed or deferred.
-> `overflow = |{ p : start_time(p) > room_close_time }|`
-
-**Recommended HB close time** — Latest time a patient is still in the holding bay, at the 95th percentile across all simulated days.
-> `recommended_close = P95(last_occupied_time_per_day)`
-> `last_occupied_time(d) = latest 5-min slot with occupancy > 0`
-""")
-
-
-    st.divider()
-
-    # ── Baseline comparison ────────────────────────────────────────────────
-    if _baseline_summary is not None and not _baseline_is_current:
-        with st.expander("Compare vs default baseline", expanded=True):
-            _show_baseline_comparison(summary, _baseline_summary)
-    elif _baseline_is_current:
-        st.caption("You are running the **default baseline** configuration — no comparison needed.")
-
-    st.divider()
-
-    # ── HB bottleneck analysis ─────────────────────────────────────────────
-    st.subheader("Holding Bay Capacity Analysis")
+    st.subheader("Holding Bay Peak Demand (P95)")
     st.caption(
-        "The histogram shows how often the peak simultaneous bay occupancy reached each level "
-        "across all simulated days. The P95 line drives the recommendation: on 95% of days "
-        "the recommended bay count is sufficient, limiting bottlenecks to ≤5% of operating days."
+        "HB Peak P95 is the primary ranking criterion. It measures the 95th-percentile of the "
+        "maximum simultaneous holding-bay occupancy across all simulated days — i.e., how many "
+        "bays are needed on the worst 5% of days."
     )
+
+    oh1, oh2, oh3 = st.columns(3)
+    oh1.metric("Worst-case peak (all days)", f"{hb['overall_peak_bays']} bays")
+    oh2.metric("P90 daily peak", f"{hb['peak_bays_p90']:.1f} bays")
+    oh3.metric("P95 daily peak → recommendation", f"{hb['recommended_bays_p95']} bays")
+
     _show_fig(plot_hb_peak_distribution(summary))
 
     with st.expander("📐 Definition & formula", expanded=False):
@@ -1444,45 +1407,109 @@ with tab_summary:
 > `recommended_bays = ⌈P95(daily_peak)⌉`
 """)
 
-    oh1, oh2, oh3 = st.columns(3)
-    oh1.metric("Worst-case peak (all days)", f"{hb['overall_peak_bays']} bays")
-    oh2.metric("P90 daily peak", f"{hb['peak_bays_p90']:.1f} bays")
-    oh3.metric("P95 daily peak → recommendation", f"{hb['recommended_bays_p95']} bays")
-
     st.divider()
 
-    # ── overflow breakdown ─────────────────────────────────────────────────
-    st.subheader("Procedure Overflow (Scheduled Past Room Closing Time)")
+    if "cost_analysis" in summary:
+        try:
+            for key in ["hb_service_constraint"]:
+                fig = getattr(VA, f"plot_{key}")(summary)
+                meta = _CHART_META.get(key, {})
+                st.subheader(meta.get("title", key))
+                if "definition" in meta:
+                    with st.expander("📐 Definition & formula", expanded=False):
+                        st.markdown(meta["definition"])
+                        if "formula" in meta:
+                            st.code(meta["formula"], language=None)
+                _show_fig(fig)
+        except Exception as e:
+            st.error(f"Chart failed: {e}")
+
+    if compare_policies and policy_results:
+        st.divider()
+        try:
+            fig = VA.plot_policy_hb_peaks(policy_results)
+            meta = _CHART_META.get("policy_hb_peaks", {})
+            st.subheader(meta.get("title", "Policy Comparison — HB Peak"))
+            if "definition" in meta:
+                with st.expander("📐 Definition & formula", expanded=False):
+                    st.markdown(meta["definition"])
+                    if "formula" in meta:
+                        st.code(meta["formula"], language=None)
+            _show_fig(fig)
+        except Exception as e:
+            st.error(f"Policy HB peaks chart failed: {e}")
+
+# ── Tab: Overflow ─────────────────────────────────────────────────────────────
+with tab_overflow:
+    _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
+    hb = summary["holding_bay"]
+
+    st.subheader("Procedure Overflow")
     st.caption(
-        "Overflow means a procedure could not start before the room's scheduled closing "
-        "time — a direct measure of scheduling delays and care access."
+        "Overflow is the second ranking criterion. It counts procedures that could not start "
+        "before the room's scheduled closing time — a direct measure of scheduling delays and care access."
     )
+
     ov1, ov2, ov3, ov4 = st.columns(4)
-    ov1.metric("Total overflow",  str(summary["overflow_total"]))
-    ov2.metric("Cath overflow",   str(summary.get("overflow_cath", "—")))
-    ov3.metric("EP overflow",     str(summary.get("overflow_ep", "—")))
-    ov4.metric("Flex room overflow", str(summary.get("overflow_middle", "—")))
+    ov1.metric("Total overflow",      str(summary["overflow_total"]))
+    ov2.metric("Cath overflow",       str(summary.get("overflow_cath", "—")))
+    ov3.metric("EP overflow",         str(summary.get("overflow_ep", "—")))
+    ov4.metric("Flex room overflow",  str(summary.get("overflow_middle", "—")))
+
+    with st.expander("📐 Definition & formula", expanded=False):
+        st.markdown("""
+**Overflow (past closing)** — Number of procedures whose scheduled start time fell after the room's closing time, meaning they were delayed or deferred.
+> `overflow = |{ p : start_time(p) > room_close_time }|`
+""")
+
+    if compare_policies and policy_results:
+        st.divider()
+        try:
+            for key in ["policy_overflow", "policy_utilization"]:
+                fig = getattr(VA, f"plot_{key}")(policy_results)
+                meta = _CHART_META.get(key, {})
+                st.subheader(meta.get("title", key))
+                if "definition" in meta:
+                    with st.expander("📐 Definition & formula", expanded=False):
+                        st.markdown(meta["definition"])
+                        if "formula" in meta:
+                            st.code(meta["formula"], language=None)
+                _show_fig(fig)
+        except Exception as e:
+            st.error(f"Chart failed: {e}")
+
+
+# ── Tab: Close hr P95 ─────────────────────────────────────────────────────────
+with tab_close:
+    _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
+    hb = summary["holding_bay"]
+
+    st.subheader("Holding Bay Close Time (P95)")
+    st.caption(
+        "Close hr P95 is the third ranking criterion. It measures the 95th-percentile of the "
+        "last time slot with any holding-bay occupancy across all simulated days — i.e., how late "
+        "the unit needs to stay open on the worst 5% of days."
+    )
+
+    c1, c2 = st.columns(2)
+    c1.metric("Recommended HB close time (P95)", _fmt_close(hb["recommended_close_p95"]))
+    c2.metric("Overall last occupied", _fmt_close(hb.get("overall_last_occupied_hours", 0)))
+
+    with st.expander("📐 Definition & formula", expanded=False):
+        st.markdown("""
+**Recommended HB close time** — Latest time a patient is still in the holding bay, at the 95th percentile across all simulated days.
+> `recommended_close = P95(last_occupied_time_per_day)`
+> `last_occupied_time(d) = latest 5-min slot with occupancy > 0`
+""")
 
     st.divider()
 
-    # ── close-time sensitivity ─────────────────────────────────────────────
     st.subheader("Close-time Sensitivity")
     st.caption(
         "Closing the holding bays earlier saves staff cost but risks leaving recovering patients "
         "without a bay — requiring hospital admission. Later close times increase nurse labour cost."
     )
     _show_fig(plot_close_time_sensitivity(summary))
-
-    with st.expander("📐 Definition & formula", expanded=False):
-        st.markdown("""
-**Bay-hours after close** — Total holding-bay occupancy remaining unserved if the bay closed at each candidate time, expressed in bay-hours.
-> `bay_hours_after_close(T) = Σ_{t > T}  occupancy(t) × (5 min / 60)`
-
-**Days with demand after close** — Number of simulated days where at least one 5-min slot past the candidate close time had non-zero occupancy.
-> `days_with_demand(T) = |{ d : ∃ t > T  such that  occupancy(d,t) > 0 }|`
-
-The table below shows both quantities for each candidate close hour.
-""")
 
     close_df = pd.DataFrame(summary["close_time_eval"]).rename(columns={
         "close_time": "Close time",
@@ -1492,22 +1519,20 @@ The table below shows both quantities for each candidate close hour.
     })
     st.dataframe(close_df.drop(columns=["close_hour"], errors="ignore"), width='stretch')
 
-# ── Tab: Charts ───────────────────────────────────────────────────────────────
-with tab_charts:
-    _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
-    if "cost_analysis" not in summary:
-        st.warning("Cost analysis data unavailable — some charts cannot be generated.")
-    else:
+    if "cost_analysis" in summary:
+        st.divider()
+        ca = summary["cost_analysis"]
+        close_rec = ca["close"]["cost_recommendation"]
+        st.subheader("Close Time Cost Recommendations")
+        cc3, cc4 = st.columns(2)
+        cc3.metric("Cost-minimizing close time", str(close_rec["close_time_hhmm"]))
+        cc4.metric("Estimated total cost", f"${close_rec['total_cost']:.2f}/day")
+
         try:
-            figs = VA.build_all_key_figures(
-                summary,
-                policy_results=policy_results,
-                source_note="Source: EP/CATH simulation based on July 2015 data",
-            )
-            for name, fig in figs.items():
-                meta = _CHART_META.get(name, {})
-                title = meta.get("title", name.replace("_", " ").title())
-                st.subheader(title)
+            for key in ["close_time_sensitivity", "close_time_days_with_demand"]:
+                fig = getattr(VA, f"plot_{key}")(summary)
+                meta = _CHART_META.get(key, {})
+                st.subheader(meta.get("title", key))
                 if "definition" in meta:
                     with st.expander("📐 Definition & formula", expanded=False):
                         st.markdown(meta["definition"])
@@ -1515,177 +1540,7 @@ with tab_charts:
                             st.code(meta["formula"], language=None)
                 _show_fig(fig)
         except Exception as e:
-            st.error(f"Chart generation failed: {e}")
-            import traceback
-            st.code(traceback.format_exc())
-
-
-# ── Tab: Cost Analysis ────────────────────────────────────────────────────────
-with tab_cost:
-    _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
-    if "cost_analysis" not in summary:
-        st.warning("Cost analysis not available.")
-    else:
-        ca = summary["cost_analysis"]
-
-        with st.expander("📋 Cost Model Assumptions & Calculation Overview", expanded=False):
-            st.markdown("""
-### Cost Model Assumptions
-
-| Parameter | Value | Source |
-|---|---|---|
-| Contribution margin per cancelled procedure | $600 | Case assumption |
-| Empty holding-bay cost per idle hour | $10 | Case assumption |
-| Overcapacity block size | 5 min | Simulation resolution |
-| Base nursing wage | $48 / hr | Case assumption |
-| Overtime multiplier | 1.5× ($72 / hr) | Case assumption |
-| Nurse-to-patient ratio | 4 : 1 | Case assumption |
-| Baseline close time (reference) | 17:00 | Case assumption |
-| Inpatient admission cost per stranded patient | $230 | Case assumption |
-| Simulated operating days | 260 | 52 weeks × 5 days |
-
----
-
-### Holding Bay Cost — Method of Calculation
-
-**Step 1 — Identify overcapacity events**
-For each simulated day *d* and each 5-minute slot *t*, an **overcapacity instance** occurs when:
-```
-occupancy(d, t)  >  bay_count  (N)
-```
-
-**Step 2 — Cancellation cost**
-Each overcapacity 5-minute block represents one procedure that cannot proceed.
-12 blocks = 60 min = 1 hour = 1 procedure slot.
-```
-avg_overcapacity_blocks/day  = Σ_d max(0, peak(d) − N)  /  total_days
-cancellation_cost            = (avg_blocks / 12)  ×  $600
-```
-
-**Step 3 — Empty bay cost**
-For each 5-minute slot where occupancy < bay count, the unused bays are idle:
-```
-empty_bay_hours/day = Σ_{d,t}  max(0, N − occupancy(d,t))  ×  (5/60)  /  total_days
-empty_bay_cost      = empty_bay_hours/day  ×  $10
-```
-
-**Step 4 — Total holding-bay cost**
-```
-total_cost(N) = cancellation_cost(N) + empty_bay_cost(N)
-```
-The **cost-minimizing recommendation** is the *N* with the lowest `total_cost`.
-The **service-constrained recommendation** is the smallest *N* where overcapacity days ≤ 5 % of 260.
-
----
-
-### Holding Bay Close Time — Method of Calculation
-
-**Step 1 — Incremental hours**
-All costs are measured relative to the 17:00 baseline:
-```
-incremental_hours = close_time_hours − 17.0
-```
-
-**Step 2 — Base nursing labour**
-Staff needed to cover average occupancy under a 4:1 ratio:
-```
-base_staff    = ⌈avg_occupancy_at_close / 4⌉     (rounded up to whole nurses)
-base_cost     = incremental_hours × base_staff × $48
-```
-
-**Step 3 — Overtime nursing labour**
-Additional staff needed for peak (P95) occupancy beyond the average:
-```
-extra_patients     = max(0,  P95_occupancy − avg_occupancy)
-overtime_staff     = ⌈extra_patients / 4⌉
-overtime_cost      = incremental_hours × overtime_staff × $72
-estimated_labor_cost = base_cost + overtime_cost
-```
-
-**Step 4 — Inpatient admission cost**
-Patients still in the bay at close time (P95 scenario) require hospital admission:
-```
-admission_cost = P95_occupancy_at_close × $230
-```
-
-**Step 5 — Total close-time cost**
-```
-total_cost = estimated_labor_cost + admission_cost
-```
-The **cost-minimizing close time** is the candidate time with the lowest `total_cost`.
-""")
-
-        st.subheader("Holding Bay Recommendations")
-        hb_service = ca["hb"]["service_constraint_recommendation"]
-        hb_cost_r  = ca["hb"]["cost_recommendation"]
-        cc1, cc2 = st.columns(2)
-        cc1.metric("Service-constrained recommendation", f"{int(hb_service['hb_count'])} bays",
-                   help="Minimum bays meeting <=5% overcapacity days constraint")
-        cc2.metric("Cost-minimizing recommendation", f"{int(hb_cost_r['hb_count'])} bays",
-                   help="Bay count with lowest total cost")
-
-        with st.expander("📐 Definition & formulas", expanded=False):
-            st.markdown("""
-**Service-constrained recommendation** — Smallest bay count where overcapacity (demand > bays) occurs on ≤ 5 % of the 260 simulated operating days.
-> `min N  such that  overcapacity_days(N) / 260  ≤  0.05`
-
-**Cost-minimizing recommendation** — Bay count that minimises total daily holding-bay cost.
-> `total_cost = cancellation_cost + empty_bay_cost`
-> `cancellation_cost = (avg_overcapacity_5min_blocks/day ÷ 12) × $600`
-> `empty_bay_cost    = avg_empty_bay_hours/day × $10`
-
-Parameters: $600 contribution margin per cancelled procedure; $10 per idle bay-hour.
-""")
-
-        st.subheader("Holding Bay Cost Table")
-        st.dataframe(
-            ca["hb"]["cost_table"].style.format({
-                "cancellation_cost":       "${:.2f}",
-                "empty_holding_bay_cost":  "${:.2f}",
-                "total_holding_bay_cost":  "${:.2f}",
-                "pct_days_with_instances": "{:.1%}",
-            }),
-            width='stretch',
-        )
-        with st.expander("📐 Column definitions", expanded=False):
-            st.markdown("""
-| Column | Meaning | Formula |
-|---|---|---|
-| `hb_count` | Candidate bay count being evaluated | — |
-| `days_with_instances` | Days where peak occupancy exceeded bay count | count of days where `peak(d) > N` |
-| `pct_days_with_instances` | % of 260 days with at least one overcapacity slot | `days_with_instances / 260` |
-| `avg_instances_per_day` | Average number of 5-min overcapacity slots per day | `Σ max(0, peak(d)−N) / 260` |
-| `meets_service_constraint` | True if overcapacity days ≤ 5% (≤ 13 days) | `pct_days ≤ 0.05` |
-| `delay_60min_blocks` | Avg full-hour blocks of overcapacity per day (= avg procedures delayed) | `avg_instances / 12` |
-| `cancellation_cost` | Daily cost of lost procedures due to overcapacity | `delay_60min_blocks × $600` |
-| `avg_daily_empty_hour_blocks` | Average idle bay-hours per day (bays unused) | `Σ max(0, N−occ(d,t)) × (5/60) / 260` |
-| `empty_holding_bay_cost` | Daily cost of idle holding-bay capacity | `avg_daily_empty_hour_blocks × $10` |
-| `total_holding_bay_cost` | Total estimated daily cost | `cancellation_cost + empty_holding_bay_cost` |
-""")
-
-        st.divider()
-
-        close_rec = ca["close"]["cost_recommendation"]
-        st.subheader("Close Time Recommendations")
-        cc3, cc4 = st.columns(2)
-        cc3.metric("Cost-minimizing close time", str(close_rec["close_time_hhmm"]))
-        cc4.metric("Estimated total cost", f"${close_rec['total_cost']:.2f}/day")
-
-        with st.expander("📐 Definition & formulas", expanded=False):
-            st.markdown("""
-**Cost-minimizing close time** — Close time that minimises the sum of nursing labour cost and hospital admission cost.
-> `total_cost = labor_cost + admission_cost`
-
-**Labor cost** (incremental hours beyond 17:00 baseline):
-> `base_staff    = ⌈avg_occupancy / 4⌉  nurses @ $48/hr`
-> `overtime_staff= ⌈(P95_occupancy − avg_occupancy) / 4⌉  nurses @ $72/hr`
-> `labor_cost    = incremental_hours × (base_staff_cost + overtime_staff_cost)`
-
-**Admission cost** (patients still in HB at close must be admitted to hospital):
-> `admission_cost = P95_occupancy_at_close × $230`
-
-Parameters: 4:1 patient-to-nurse ratio; $48/hr base wage; 1.5× overtime; $230/admission; baseline 17:00.
-""")
+            st.error(f"Chart failed: {e}")
 
         st.subheader("Close Time Cost Table")
         close_cost_df = ca["close"]["cost_table"][[
@@ -1706,15 +1561,110 @@ Parameters: 4:1 patient-to-nurse ratio; $48/hr base wage; 1.5× overtime; $230/a
 |---|---|---|
 | `close_time_hhmm` | Candidate close time (HH:MM) | — |
 | `incremental_hours` | Extra open hours beyond the 17:00 baseline | `close_hours − 17.0` |
-| `avg_occupancy` | Average patients in HB at close time across all days | simulation mean |
-| `p95_occupancy` | 95th-percentile patients in HB at close time | simulation P95 |
-| `base_staff_rounded` | Nurses needed to cover average occupancy | `⌈avg_occupancy / 4⌉` |
-| `overtime_staff_rounded` | Extra nurses needed for P95 peak above average | `⌈max(0, P95 − avg) / 4⌉` |
 | `estimated_labor_cost` | Total nursing labour cost for incremental hours | `incremental_hrs × (base_staff × $48 + overtime_staff × $72)` |
-| `admitted_patients_95` | Patients still in HB at close under P95 scenario | `p95_occupancy` |
 | `admission_cost` | Cost of admitting stranded patients to hospital | `admitted_patients_95 × $230` |
 | `total_cost` | Total daily cost at this close time | `estimated_labor_cost + admission_cost` |
 """)
+
+    if compare_policies and policy_results:
+        st.divider()
+        try:
+            fig = VA.plot_policy_close_burden(policy_results)
+            meta = _CHART_META.get("policy_close_burden", {})
+            st.subheader(meta.get("title", "Policy Comparison — Close Burden"))
+            if "definition" in meta:
+                with st.expander("📐 Definition & formula", expanded=False):
+                    st.markdown(meta["definition"])
+                    if "formula" in meta:
+                        st.code(meta["formula"], language=None)
+            _show_fig(fig)
+        except Exception as e:
+            st.error(f"Policy close burden chart failed: {e}")
+
+# ── Tab: Min Cost ──────────────────────────────────────────────────────────────
+with tab_mincost:
+    _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
+
+    st.subheader("Minimum Total Cost")
+    st.caption(
+        "Min cost is the fourth (tiebreaker) ranking criterion. It is the lowest estimated "
+        "daily cost — combining nurse labour and inpatient admission costs — at the optimal "
+        "holding-bay close time."
+    )
+
+    if "cost_analysis" not in summary:
+        st.warning("Cost analysis not available.")
+    else:
+        ca = summary["cost_analysis"]
+        hb_cost_r = ca["hb"]["cost_recommendation"]
+        hb_service = ca["hb"]["service_constraint_recommendation"]
+        close_rec  = ca["close"]["cost_recommendation"]
+
+        cc1, cc2, cc3 = st.columns(3)
+        cc1.metric("Cost-minimizing bay count", f"{int(hb_cost_r['hb_count'])} bays",
+                   help="Bay count with lowest total holding-bay cost")
+        cc2.metric("Service-constrained bay count", f"{int(hb_service['hb_count'])} bays",
+                   help="Minimum bays meeting ≤5% overcapacity days")
+        cc3.metric("Min estimated total cost", f"${close_rec['total_cost']:.2f}/day")
+
+        with st.expander("📋 Cost Model Assumptions", expanded=False):
+            st.markdown("""
+### Cost Model Assumptions
+
+| Parameter | Value | Source |
+|---|---|---|
+| Contribution margin per cancelled procedure | $600 | Case assumption |
+| Empty holding-bay cost per idle hour | $10 | Case assumption |
+| Base nursing wage | $48 / hr | Case assumption |
+| Overtime multiplier | 1.5× ($72 / hr) | Case assumption |
+| Nurse-to-patient ratio | 4 : 1 | Case assumption |
+| Baseline close time (reference) | 17:00 | Case assumption |
+| Inpatient admission cost per stranded patient | $230 | Case assumption |
+| Simulated operating days | 260 | 52 weeks × 5 days |
+""")
+
+        st.divider()
+
+        try:
+            for key in ["hb_total_cost", "hb_cost_components"]:
+                fig = getattr(VA, f"plot_{key}")(summary)
+                meta = _CHART_META.get(key, {})
+                st.subheader(meta.get("title", key))
+                if "definition" in meta:
+                    with st.expander("📐 Definition & formula", expanded=False):
+                        st.markdown(meta["definition"])
+                        if "formula" in meta:
+                            st.code(meta["formula"], language=None)
+                _show_fig(fig)
+        except Exception as e:
+            st.error(f"Chart failed: {e}")
+
+        st.subheader("Holding Bay Cost Table")
+        st.dataframe(
+            ca["hb"]["cost_table"].style.format({
+                "cancellation_cost":       "${:.2f}",
+                "empty_holding_bay_cost":  "${:.2f}",
+                "total_holding_bay_cost":  "${:.2f}",
+                "pct_days_with_instances": "{:.1%}",
+            }),
+            width='stretch',
+        )
+
+        st.divider()
+
+        try:
+            for key in ["close_time_total_cost", "close_time_cost_components"]:
+                fig = getattr(VA, f"plot_{key}")(summary)
+                meta = _CHART_META.get(key, {})
+                st.subheader(meta.get("title", key))
+                if "definition" in meta:
+                    with st.expander("📐 Definition & formula", expanded=False):
+                        st.markdown(meta["definition"])
+                        if "formula" in meta:
+                            st.code(meta["formula"], language=None)
+                _show_fig(fig)
+        except Exception as e:
+            st.error(f"Chart failed: {e}")
 
 # ── Tab: Policy Comparison ────────────────────────────────────────────────────
 with tab_policy:
