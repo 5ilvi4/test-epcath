@@ -2055,8 +2055,6 @@ with tab_conclusion:
         )
 
         with st.expander("Evidence: Policy comparison charts"):
-            st.caption("Composite score, utilization, overflow, and HB demand across all five policies.")
-            _show_fig(plot_policy_composite_score(policy_results))
             _show_fig(plot_policy_radar(policy_results))
             _show_fig(plot_policy_heatmap(policy_results))
     else:
