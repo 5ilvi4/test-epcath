@@ -1008,10 +1008,14 @@ h2, h3 { color: #cbd5e1 !important; font-weight: 600; }
 """, unsafe_allow_html=True)
 
 st.title("EP/CATH Lab Simulation")
-st.caption("v2 — emergency fix applied")
 st.markdown(
-    "Explore the underlying procedure and shift data, set parameters, and run the "
-    "discrete event simulation to get holding bay sizing and cost recommendations."
+    "EP and CATH labs face a daily planning challenge: too few holding bays cause patient backlogs "
+    "and care delays, while too many bays waste staff time and budget. Scheduling order also matters — "
+    "the sequence in which procedures are prioritised affects how many run past room closing time "
+    "(overflow) and how hard the holding bay is hit at peak hours. "
+    "This simulator runs a discrete-event model using real July 2015 case data to find the optimal "
+    "number of holding bays, the best time to close the unit, and the scheduling policy that minimises "
+    "patient delays and operational cost — ranked by HB peak demand, overflow, closing hour, and total cost."
 )
 
 # ── sidebar ───────────────────────────────────────────────────────────────────
