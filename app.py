@@ -820,17 +820,12 @@ def plot_policy_heatmap(policy_results):
             score_matrix[row, col] = normed[col]
             cell_text[row][col] = fmt.format(vals[col])
 
-    # Sort policies by composite score descending (best on the left)
-    col_order = np.argsort(score_matrix.mean(axis=0))[::-1]
-    score_matrix = score_matrix[:, col_order]
-    cell_text    = [[cell_text[r][c] for c in col_order] for r in range(n_metrics)]
-    sorted_labels = [labels[c] for c in col_order]
-
+    # policy_results is already ranked best-first by comparePriorityRules — preserve that order
     fig, ax = plt.subplots(figsize=(max(6, n_policies * 1.8), n_metrics * 0.9 + 1.5), facecolor=BG)
     im = ax.imshow(score_matrix, cmap="Blues", vmin=0, vmax=1, aspect="auto")
 
     ax.set_xticks(range(n_policies))
-    ax.set_xticklabels(sorted_labels, fontsize=9, rotation=20, ha="right")
+    ax.set_xticklabels(labels, fontsize=9, rotation=20, ha="right")
     ax.set_yticks(range(n_metrics))
     ax.set_yticklabels([m[0] for m in metrics_cfg], fontsize=9)
     ax.tick_params(length=0)
