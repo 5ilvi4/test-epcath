@@ -751,20 +751,17 @@ def _norm(vals, higher_is_better=True):
 
 
 def plot_policy_radar(policy_results):
-    """Radar/spider chart: 5 policies × 5 normalised KPIs."""
+    """Radar/spider chart: 5 policies × 4 normalised KPIs."""
     labels = [r["priority_rule"] for r in policy_results]
 
     # Raw values per metric (each column = one policy)
     raw = {
-        "Cath\nUtil":    [r["cath_utilization_avg"] * 100 for r in policy_results],
-        "EP\nUtil":      [r["ep_utilization_avg"] * 100 for r in policy_results],
         "Low\nOverflow": [r["overflow_total"] for r in policy_results],   # lower better
         "Low HB\nPeak":  [r["holding_bay"]["peak_bays_p95"] for r in policy_results],  # lower better
         "Early\nClose":  [r["holding_bay"]["last_occupied_p95_hours"] for r in policy_results],  # lower better
         "Low\nCost":     [r.get("min_total_cost", float("inf")) for r in policy_results],  # lower better
     }
-    higher = {"Cath\nUtil": True, "EP\nUtil": True,
-              "Low\nOverflow": False, "Low HB\nPeak": False, "Early\nClose": False,
+    higher = {"Low\nOverflow": False, "Low HB\nPeak": False, "Early\nClose": False,
               "Low\nCost": False}
 
     categories = list(raw.keys())
