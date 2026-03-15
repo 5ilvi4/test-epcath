@@ -1080,7 +1080,7 @@ proc_df  = load_proc_data(proc_file)
 shift_df = load_shift_data(shift_file)
 cost_table_baseline = get_baseline_cost_table()
 
-tabs = ["Data Overview", "HB Peak P95", "Overflow", "Close hr P95", "Min Cost", "Policy Comparison", "Recommendations & Conclusion"]
+tabs = ["Data Overview", "HB Peak P95", "Overflow", "Closing Hour", "Min Cost", "Policy Comparison", "Recommendations & Conclusion"]
 tab_eda, tab_hb, tab_overflow, tab_close, tab_mincost, tab_policy, tab_conclusion = st.tabs(tabs)
 
 # ── Tab: Data Overview (EDA) ──────────────────────────────────────────────────
@@ -1473,30 +1473,10 @@ with tab_overflow:
             st.error(f"Chart failed: {e}")
 
 
-# ── Tab: Close hr P95 ─────────────────────────────────────────────────────────
+# ── Tab: Closing Hour ─────────────────────────────────────────────────────────
 with tab_close:
     _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
     hb = summary["holding_bay"]
-
-    st.subheader("Holding Bay Close Time (P95)")
-    st.caption(
-        "Close hr P95 is the third ranking criterion. It measures the 95th-percentile of the "
-        "last time slot with any holding-bay occupancy across all simulated days — i.e., how late "
-        "the unit needs to stay open on the worst 5% of days."
-    )
-
-    c1, c2 = st.columns(2)
-    c1.metric("Recommended HB close time (P95)", _fmt_close(hb["recommended_close_p95"]))
-    c2.metric("Overall last occupied", _fmt_close(hb.get("overall_last_occupied_hours", 0)))
-
-    with st.expander("📐 Definition & formula", expanded=False):
-        st.markdown("""
-**Recommended HB close time** — Latest time a patient is still in the holding bay, at the 95th percentile across all simulated days.
-> `recommended_close = P95(last_occupied_time_per_day)`
-> `last_occupied_time(d) = latest 5-min slot with occupancy > 0`
-""")
-
-    st.divider()
 
     st.subheader("Close-time Sensitivity")
     st.caption(
@@ -1523,7 +1503,8 @@ with tab_close:
         cc4.metric("Estimated total cost", f"${close_rec['total_cost']:.2f}/day")
 
         try:
-            for key in ["close_time_sensitivity", "close_time_days_with_demand"]:
+            for key in ["close_time_sensitivity", "close_time_days_with_demand",
+                        "close_time_total_cost", "close_time_cost_components"]:
                 fig = getattr(VA, f"plot_{key}")(summary)
                 meta = _CHART_META.get(key, {})
                 st.subheader(meta.get("title", key))
@@ -1668,21 +1649,6 @@ with tab_mincost:
             width='stretch',
         )
 
-        st.divider()
-
-        try:
-            for key in ["close_time_total_cost", "close_time_cost_components"]:
-                fig = getattr(VA, f"plot_{key}")(summary)
-                meta = _CHART_META.get(key, {})
-                st.subheader(meta.get("title", key))
-                if "definition" in meta:
-                    with st.expander("📐 Definition & formula", expanded=False):
-                        st.markdown(meta["definition"])
-                        if "formula" in meta:
-                            st.code(meta["formula"], language=None)
-                _show_fig(fig)
-        except Exception as e:
-            st.error(f"Chart failed: {e}")
 
 # ── Tab: Policy Comparison ────────────────────────────────────────────────────
 with tab_policy:
