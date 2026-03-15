@@ -589,8 +589,10 @@ def comparePriorityRules(baseParams, priorities=None, saveResults=False):
             _, _, close_rows = buildCostInputsFromSimulation(timePeriod, p)
             cost_result = summarize_close_time_decision(close_rows, params=CloseTimeCostParams())
             summary["min_total_cost"] = float(cost_result["cost_recommendation"]["total_cost"])
+            summary["recommended_close_time"] = cost_result["cost_recommendation"]["close_time_hours"]
         except Exception:
             summary["min_total_cost"] = float("inf")
+            summary["recommended_close_time"] = float("inf")
 
         summary["priority_rule"] = priorityName
         results.append(summary)
