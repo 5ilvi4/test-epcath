@@ -728,15 +728,12 @@ def plot_policy_summary_table(policy_results):
         hb = r["holding_bay"]
         rows.append({
             "Priority rule":        r["priority_rule"],
-            "Cath util (%)":        round(r["cath_utilization_avg"] * 100, 1),
-            "EP util (%)":          round(r["ep_utilization_avg"] * 100, 1),
-            "Mean util (%)":        round(r["mean_room_utilization"] * 100, 1),
-            "Procs placed":         r["procs_placed"],
-            "Overflow (total)":     r["overflow_total"],
-            "Recommended HB bays":  hb["recommended_bays_p95"],
             "HB peak P95":          round(hb["peak_bays_p95"], 1),
-            "Rec. close time":      _fmt_close(hb["recommended_close_p95"]),
+            "Overflow (total)":     r["overflow_total"],
+            "Close hr P95":         _fmt_close(hb["recommended_close_p95"]),
             "Min total cost ($)":   round(r.get("min_total_cost", float("inf")), 2),
+            "Procs placed":         r["procs_placed"],
+            "Recommended HB bays":  hb["recommended_bays_p95"],
         })
     return pd.DataFrame(rows)
 
@@ -1880,7 +1877,7 @@ with tab_policy:
             "**What it shows:** The underlying numbers behind the charts above — one row per "
             "policy with the exact values for every KPI. This is the primary reference for "
             "reporting and for validating the visual summaries. "
-            "**How to read it:** Lower overflow and HB peak are better; higher utilization is better. "
+            "**How to read it:** Columns follow the ranking order — lower HB peak, overflow, close time, and cost are all better. "
             "Sort any column by clicking its header to quickly find the top-performing policy "
             "on a specific metric."
         )
