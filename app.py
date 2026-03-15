@@ -271,7 +271,7 @@ def get_baseline_simulation_summary():
     return bsummary
 
 @st.cache_resource(show_spinner=False)
-def _cached_simulation(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=5):
+def _cached_simulation(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=6):
     """Run simulation once per unique parameter set; result shared across all user sessions."""
     random.seed(30)
     p = make_params(scenario_key, priority_rule, hb_clean_time, num_cath_rooms, resolution)
@@ -1196,7 +1196,7 @@ if not run:
 with st.spinner("Running simulation... this may take 30-60 seconds."):
     try:
         timePeriod, summary, policy_results, policy_best = _cached_simulation(
-            scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=5
+            scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=6
         )
     except Exception as e:
         st.error(f"Simulation failed: {e}")
@@ -2154,6 +2154,7 @@ with tab_conclusion:
     cath_util_pct = round((_best_row["cath_utilization_avg"] if _best_row else summary["cath_utilization_avg"]) * 100, 1)
     ep_util_pct   = round((_best_row["ep_utilization_avg"]   if _best_row else summary["ep_utilization_avg"])   * 100, 1)
     overflow_n    = _best_row["overflow_total"] if _best_row else summary["overflow_total"]
+    min_cost      = _best_row.get("min_total_cost") if _best_row else None
 
     st.markdown(
         f"Based on a discrete-event simulation of **{summary.get('total_procs', 7402):,} procedures** "
@@ -2179,9 +2180,10 @@ The P95 last-occupied time of {rec_close_str} confirms the unit naturally clears
 on the vast majority of operating days.
 
 **Scheduling policy ({rec_policy}):** Of the five priority rules evaluated, this policy
-produced the best overall balance across room utilization (Cath: {cath_util_pct}%,
-EP: {ep_util_pct}%), procedure overflow ({overflow_n} procedures past room closing),
-and holding bay demand. It requires no additional resources — only a change in how
+produced the lowest estimated total cost{f" (${min_cost:,.2f}/day)" if min_cost is not None else ""},
+with room utilization (Cath: {cath_util_pct}%, EP: {ep_util_pct}%),
+procedure overflow ({overflow_n} procedures past room closing), and the best overall
+holding bay demand. It requires no additional resources — only a change in how
 procedures are ordered each morning.
         """
     )
