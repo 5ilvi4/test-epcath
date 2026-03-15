@@ -1532,45 +1532,6 @@ with tab_charts:
             import traceback
             st.code(traceback.format_exc())
 
-    # ── Heatmaps ──────────────────────────────────────────────────────────────
-    st.divider()
-    st.subheader("Holding-Bay Demand Heatmap")
-    st.caption(
-        "Each row is one simulated day; each column is a 5-minute time slot. "
-        "Colour intensity shows how many patients were in the holding bay during that slot."
-    )
-    with st.expander("📐 Definition & formula", expanded=False):
-        st.markdown("""
-**Holding-bay demand** — number of patients occupying a holding-bay slot at a given 5-minute interval on a given simulated day.
-
-> `demand(day, slot) = bins[2][(day, slot_index)]`
-
-where `slot_index = minutes_from_midnight / resolution` and `resolution = 5 min`.
-Colour scale: light yellow → dark red = low → high occupancy.
-""")
-    try:
-        _show_fig(plot_hb_demand_heatmap(summary, resolution=resolution))
-    except Exception as e:
-        st.error(f"HB demand heatmap failed: {e}")
-
-    st.divider()
-    st.subheader("Room Schedule Heatmap")
-    st.caption(
-        "Each row is one procedure room (Cath or EP); each column is a 5-minute time slot (07:00–22:00). "
-        "Colour shows the percentage of simulated days on which that room had at least one procedure in that slot."
-    )
-    with st.expander("📐 Definition & formula", expanded=False):
-        st.markdown("""
-**Room utilisation per slot** — fraction of simulated days on which a given room had at least one procedure scheduled in the 5-minute window.
-
-> `utilisation%(room, slot) = (# days with procedure in slot) / total_days × 100`
-
-Colour scale: white → dark blue = 0 % → 100 % of days occupied.
-""")
-    try:
-        _show_fig(plot_room_schedule_heatmap(summary, resolution=resolution))
-    except Exception as e:
-        st.error(f"Room schedule heatmap failed: {e}")
 
 # ── Tab: Cost Analysis ────────────────────────────────────────────────────────
 with tab_cost:
@@ -1791,32 +1752,7 @@ with tab_policy:
             f"→ earliest close time → highest utilization."
         )
 
-        # ── visual 1: composite score ──────────────────────────────────────
-        st.subheader("Overall Ranking — Composite Score")
-        st.caption(
-            "**What it shows:** A single aggregated score per scheduling policy, combining five "
-            "key performance indicators into one number. Each KPI is first min-max normalised "
-            "to a 0–1 scale (1 = best policy on that metric, 0 = worst), then averaged. "
-            "Room utilization is double-weighted because it directly supports the business case "
-            "for hiring an additional EP provider."
-        )
-        st.caption(
-            "**How to read it:** The longer the bar, the better the policy performs overall. "
-            "The blue bar is the top-ranked policy. Bars of similar length mean the policies "
-            "are roughly equivalent — look at the individual breakdowns below to understand "
-            "where differences actually lie."
-        )
-        st.caption(
-            "**Planning implication:** Use this chart to quickly narrow the field. "
-            "If one policy scores meaningfully higher, it is the safest default. "
-            "If scores are close, the heatmap and breakdown charts will show which policy "
-            "is strongest on the metric your team cares most about."
-        )
-        _show_fig(plot_policy_composite_score(policy_results))
-
-        st.divider()
-
-        # ── visual 2: radar chart ──────────────────────────────────────────
+        # ── visual 1: radar chart ──────────────────────────────────────────
         st.subheader("Multi-Metric Radar Chart (Spider Chart)")
         st.caption(
             "**What it looks like:** A spider web with 5 spokes radiating from the centre — "
