@@ -74,8 +74,8 @@ ROOM_MAP    = {0.0: "Cath only", 1.0: "EP only", 2.0: "Flexible"}
 SHIFT_MAP   = {0.25: "Quarter day", 0.5: "Half day", 1.0: "Full day"}
 
 BG   = "#1a2233"   # chart face — matches Streamlit secondary bg
-C1   = "#5b9bd5"   # blue
-C2   = "#e07878"   # coral red
+C1   = "#e07878"   # coral red  (Cath)
+C2   = "#5b9bd5"   # blue       (EP)
 C3   = "#7a8ba0"   # muted slate
 GRID = "#2a3547"   # subtle grid
 TEXT = "#e2e8f0"   # light text on dark backgrounds
@@ -437,16 +437,21 @@ def plot_cost_curve(cost_table):
     df = cost_table.sort_values("hb_count")
     fig, ax = plt.subplots(figsize=(8, 4), facecolor=BG)
 
+    # Neutral colors for this cost chart — distinct from Cath (red) and EP (blue)
+    _CANCEL_CLR = "#f59e0b"   # amber  — cancellation cost
+    _EMPTY_CLR  = "#34d399"   # teal   — empty bay cost
+    _BEST_CLR   = "#a78bfa"   # purple — cost-minimising marker
+
     ax.stackplot(
         df["hb_count"],
         df["cancellation_cost"],
         df["empty_holding_bay_cost"],
         labels=["Cancellation cost", "Empty bay cost"],
-        colors=[C2, C1],
+        colors=[_CANCEL_CLR, _EMPTY_CLR],
         alpha=0.75,
     )
     ax.plot(df["hb_count"], df["total_holding_bay_cost"],
-            color="#222222", linewidth=1.5, label="Total cost")
+            color="#e2e8f0", linewidth=1.5, label="Total cost")
 
     # Mark current plan
     if CURRENT_HB_COUNT in df["hb_count"].values:
@@ -456,9 +461,9 @@ def plot_cost_curve(cost_table):
 
     # Mark cost-minimizing point
     best = df.loc[df["total_holding_bay_cost"].idxmin()]
-    ax.axvline(best["hb_count"], color=C2, linestyle="--", linewidth=1.2,
+    ax.axvline(best["hb_count"], color=_BEST_CLR, linestyle="--", linewidth=1.2,
                label=f"Cost-minimizing ({int(best['hb_count'])} bays)")
-    ax.scatter([best["hb_count"]], [best["total_holding_bay_cost"]], color=C2, zorder=5, s=60)
+    ax.scatter([best["hb_count"]], [best["total_holding_bay_cost"]], color=_BEST_CLR, zorder=5, s=60)
 
     ax.set_title("Daily holding bay cost vs bay count", fontsize=11, fontweight="bold", loc="left")
     ax.set_xlabel("Number of holding bays")
