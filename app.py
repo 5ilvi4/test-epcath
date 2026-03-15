@@ -437,10 +437,10 @@ def plot_cost_curve(cost_table):
     df = cost_table.sort_values("hb_count")
     fig, ax = plt.subplots(figsize=(8, 4), facecolor=BG)
 
-    # Neutral colors for this cost chart — distinct from Cath (red) and EP (blue)
-    _CANCEL_CLR = "#f59e0b"   # amber  — cancellation cost
-    _EMPTY_CLR  = "#34d399"   # teal   — empty bay cost
-    _BEST_CLR   = "#a78bfa"   # purple — cost-minimising marker
+    # Palette-aligned colors — distinct from Cath (red) and EP (blue)
+    _CANCEL_CLR = "#e8956d"   # muted orange  — cancellation cost
+    _EMPTY_CLR  = "#56b4a0"   # muted teal    — empty bay cost
+    _BEST_CLR   = "#c9b060"   # muted gold    — cost-minimising marker
 
     ax.stackplot(
         df["hb_count"],
