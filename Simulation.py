@@ -416,7 +416,7 @@ def analyzeHoldingBayDemand(timePeriod, params, bayPercentile=95, closePercentil
             dailyLastOccupiedHours.append(0.0)
         else:
             lastIdx = occupiedIdx[-1]
-            lastHour = min((lastIdx * params.resolution) / 60.0, 24.0)  # cap at midnight
+            lastHour = (lastIdx * params.resolution) / 60.0
             dailyLastOccupiedHours.append(lastHour)
 
     overallPeak = max(dailyPeaks) if len(dailyPeaks) > 0 else 0

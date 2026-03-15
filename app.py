@@ -271,7 +271,7 @@ def get_baseline_simulation_summary():
     return bsummary
 
 @st.cache_resource(show_spinner=False)
-def _cached_simulation(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=11):
+def _cached_simulation(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=12):
     """Run simulation once per unique parameter set; result shared across all user sessions."""
     random.seed(30)
     p = make_params(scenario_key, priority_rule, hb_clean_time, num_cath_rooms, resolution)
@@ -802,7 +802,9 @@ def plot_policy_heatmap(policy_results):
 
     def _fmt_hhmm(h):
         total = int(round(h * 60))
-        return f"{total // 60:02d}:{total % 60:02d}"
+        hh, mm = total // 60, total % 60
+        suffix = "+" if hh >= 24 else ""
+        return f"{hh % 24:02d}:{mm:02d}{suffix}"
 
     metrics_cfg = [
         ("Overflow",         [r["overflow_total"] for r in policy_results],              False, "{:.0f}".format),
@@ -1203,7 +1205,7 @@ if not run:
 with st.spinner("Running simulation... this may take 30-60 seconds."):
     try:
         timePeriod, summary, policy_results, policy_best = _cached_simulation(
-            scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=11
+            scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=12
         )
     except Exception as e:
         st.error(f"Simulation failed: {e}")
