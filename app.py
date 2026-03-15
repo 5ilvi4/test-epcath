@@ -801,9 +801,6 @@ def plot_policy_heatmap(policy_results):
     labels = [r["priority_rule"] for r in policy_results]
 
     metrics_cfg = [
-        ("Cath util (%)",    [r["cath_utilization_avg"] * 100 for r in policy_results],  True,  "{:.1f}"),
-        ("EP util (%)",      [r["ep_utilization_avg"] * 100 for r in policy_results],    True,  "{:.1f}"),
-        ("Mean util (%)",    [r["mean_room_utilization"] * 100 for r in policy_results], True,  "{:.1f}"),
         ("Overflow",         [r["overflow_total"] for r in policy_results],              False, "{:.0f}"),
         ("HB peak P95",      [r["holding_bay"]["peak_bays_p95"] for r in policy_results],False, "{:.1f}"),
         ("Close hr P95",     [r["holding_bay"]["last_occupied_p95_hours"] for r in policy_results], False, "{:.2f}"),
@@ -824,7 +821,7 @@ def plot_policy_heatmap(policy_results):
             cell_text[row][col] = fmt.format(vals[row])
 
     fig, ax = plt.subplots(figsize=(10, max(3, n_policies * 0.7 + 1.5)), facecolor=BG)
-    im = ax.imshow(score_matrix, cmap="RdYlGn", vmin=0, vmax=1, aspect="auto")
+    im = ax.imshow(score_matrix, cmap="Blues", vmin=0, vmax=1, aspect="auto")
 
     ax.set_xticks(range(n_metrics))
     ax.set_xticklabels([m[0] for m in metrics_cfg], fontsize=9)
@@ -835,11 +832,11 @@ def plot_policy_heatmap(policy_results):
     for row in range(n_policies):
         for col in range(n_metrics):
             brightness = score_matrix[row, col]
-            txt_color = "white" if brightness < 0.55 else "#1a2233"
+            txt_color = "white" if brightness > 0.55 else "#1a2233"
             ax.text(col, row, cell_text[row][col],
                     ha="center", va="center", fontsize=9, color=txt_color, fontweight="bold")
 
-    ax.set_title("Performance heatmap — green = better on each metric",
+    ax.set_title("Performance heatmap — darker blue = better on each metric",
                  fontsize=11, fontweight="bold", loc="left")
     fig.tight_layout()
     return fig
