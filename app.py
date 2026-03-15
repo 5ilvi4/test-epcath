@@ -810,27 +810,27 @@ def plot_policy_heatmap(policy_results):
     n_policies = len(labels)
     n_metrics  = len(metrics_cfg)
 
-    # Build normalised score matrix (rows = policies, cols = metrics)
-    score_matrix = np.zeros((n_policies, n_metrics))
-    cell_text    = [[""] * n_metrics for _ in range(n_policies)]
+    # Build normalised score matrix (rows = metrics, cols = policies)
+    score_matrix = np.zeros((n_metrics, n_policies))
+    cell_text    = [[""] * n_policies for _ in range(n_metrics)]
 
-    for col, (_, vals, hib, fmt) in enumerate(metrics_cfg):
+    for row, (_, vals, hib, fmt) in enumerate(metrics_cfg):
         normed = _norm(vals, higher_is_better=hib)
-        for row in range(n_policies):
-            score_matrix[row, col] = normed[row]
-            cell_text[row][col] = fmt.format(vals[row])
+        for col in range(n_policies):
+            score_matrix[row, col] = normed[col]
+            cell_text[row][col] = fmt.format(vals[col])
 
-    fig, ax = plt.subplots(figsize=(10, max(3, n_policies * 0.7 + 1.5)), facecolor=BG)
+    fig, ax = plt.subplots(figsize=(max(6, n_policies * 1.8), n_metrics * 0.9 + 1.5), facecolor=BG)
     im = ax.imshow(score_matrix, cmap="Blues", vmin=0, vmax=1, aspect="auto")
 
-    ax.set_xticks(range(n_metrics))
-    ax.set_xticklabels([m[0] for m in metrics_cfg], fontsize=9)
-    ax.set_yticks(range(n_policies))
-    ax.set_yticklabels(labels, fontsize=9)
+    ax.set_xticks(range(n_policies))
+    ax.set_xticklabels(labels, fontsize=9, rotation=20, ha="right")
+    ax.set_yticks(range(n_metrics))
+    ax.set_yticklabels([m[0] for m in metrics_cfg], fontsize=9)
     ax.tick_params(length=0)
 
-    for row in range(n_policies):
-        for col in range(n_metrics):
+    for row in range(n_metrics):
+        for col in range(n_policies):
             brightness = score_matrix[row, col]
             txt_color = "white" if brightness > 0.55 else "#1a2233"
             ax.text(col, row, cell_text[row][col],
