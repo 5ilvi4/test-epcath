@@ -1681,10 +1681,8 @@ with tab_policy:
 
         # ── recommended policy detail ──────────────────────────────────────
         st.subheader("Recommended Policy Detail")
-        st.caption(f"Results for the top-ranked policy: **{policy_best['priority_rule']}**")
-        d1, d2, d3, d4, d5 = st.columns(5)
-        d1.metric("Cath utilization",    f"{round(policy_best['cath_utilization_avg']*100,1)}%")
-        d2.metric("EP utilization",      f"{round(policy_best['ep_utilization_avg']*100,1)}%")
+        d_label, d3, d4, d5 = st.columns(4)
+        d_label.metric("Top-ranked policy", policy_best["priority_rule"])
         d3.metric("Overflow procedures", str(policy_best["overflow_total"]))
         d4.metric("Recommended HB bays", str(policy_best["holding_bay"]["recommended_bays_p95"]))
         d5.metric("Recommended close",   _fmt_close(policy_best["holding_bay"]["recommended_close_p95"]))
