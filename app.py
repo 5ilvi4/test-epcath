@@ -688,6 +688,10 @@ def plot_policy_overflow(policy_results):
     b2 = ax.bar(x, ov_ep,   bottom=ov_cath, color=C2, alpha=0.85, label="EP overflow")
     bot3 = [a + b for a, b in zip(ov_cath, ov_ep)]
     b3 = ax.bar(x, ov_flex, bottom=bot3, color=C3, alpha=0.85, label="Flex room overflow")
+    totals = [a + b + c for a, b, c in zip(ov_cath, ov_ep, ov_flex)]
+    for i, total in enumerate(totals):
+        ax.text(i, total + max(totals) * 0.01, str(total),
+                ha="center", va="bottom", fontsize=9, fontweight="bold", color=TEXT)
     ax.set_xticks(list(x))
     ax.set_xticklabels(labels, rotation=15, ha="right", fontsize=9)
     ax.set_title("Procedures scheduled past room closing time (overflow) by policy",
@@ -1486,6 +1490,20 @@ with tab_close:
         cc3.metric("Cost-minimizing close time", str(close_rec["close_time_hhmm"]))
         cc4.metric("Estimated total cost", f"${close_rec['total_cost']:.2f}/day")
 
+        try:
+            for key in ["close_time_total_cost", "close_time_cost_components"]:
+                fig = getattr(VA, f"plot_{key}")(summary)
+                meta = _CHART_META.get(key, {})
+                st.subheader(meta.get("title", key))
+                if "definition" in meta:
+                    with st.expander("📐 Definition & formula", expanded=False):
+                        st.markdown(meta["definition"])
+                        if "formula" in meta:
+                            st.code(meta["formula"], language=None)
+                _show_fig(fig)
+        except Exception as e:
+            st.error(f"Chart failed: {e}")
+
         st.divider()
 
     st.subheader("Close-time Sensitivity")
@@ -1506,8 +1524,7 @@ with tab_close:
     if "cost_analysis" in summary:
 
         try:
-            for key in ["close_time_sensitivity", "close_time_days_with_demand",
-                        "close_time_total_cost", "close_time_cost_components"]:
+            for key in ["close_time_sensitivity", "close_time_days_with_demand"]:
                 fig = getattr(VA, f"plot_{key}")(summary)
                 meta = _CHART_META.get(key, {})
                 st.subheader(meta.get("title", key))
@@ -1544,20 +1561,6 @@ with tab_close:
 | `total_cost` | Total daily cost at this close time | `estimated_labor_cost + admission_cost` |
 """)
 
-    if compare_policies and policy_results:
-        st.divider()
-        try:
-            fig = VA.plot_policy_close_burden(policy_results)
-            meta = _CHART_META.get("policy_close_burden", {})
-            st.subheader(meta.get("title", "Policy Comparison — Close Burden"))
-            if "definition" in meta:
-                with st.expander("📐 Definition & formula", expanded=False):
-                    st.markdown(meta["definition"])
-                    if "formula" in meta:
-                        st.code(meta["formula"], language=None)
-            _show_fig(fig)
-        except Exception as e:
-            st.error(f"Policy close burden chart failed: {e}")
 
 # ── Tab: Min Cost ──────────────────────────────────────────────────────────────
 with tab_mincost:
