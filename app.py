@@ -271,7 +271,7 @@ def get_baseline_simulation_summary():
     return bsummary
 
 @st.cache_resource(show_spinner=False)
-def _cached_simulation(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=12):
+def _cached_simulation(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=13):
     """Run simulation once per unique parameter set; result shared across all user sessions."""
     random.seed(30)
     p = make_params(scenario_key, priority_rule, hb_clean_time, num_cath_rooms, resolution)
@@ -756,12 +756,12 @@ def plot_policy_radar(policy_results):
 
     # Raw values per metric (each column = one policy)
     raw = {
-        "Low\nOverflow": [r["overflow_total"] for r in policy_results],   # lower better
         "Low HB\nPeak":  [r["holding_bay"]["peak_bays_p95"] for r in policy_results],  # lower better
+        "Low\nOverflow": [r["overflow_total"] for r in policy_results],   # lower better
         "Early\nClose":  [r["holding_bay"]["last_occupied_p95_hours"] for r in policy_results],  # lower better
         "Low\nCost":     [r.get("min_total_cost", float("inf")) for r in policy_results],  # lower better
     }
-    higher = {"Low\nOverflow": False, "Low HB\nPeak": False, "Early\nClose": False,
+    higher = {"Low HB\nPeak": False, "Low\nOverflow": False, "Early\nClose": False,
               "Low\nCost": False}
 
     categories = list(raw.keys())
@@ -807,8 +807,8 @@ def plot_policy_heatmap(policy_results):
         return f"{hh % 24:02d}:{mm:02d}{suffix}"
 
     metrics_cfg = [
-        ("Overflow",         [r["overflow_total"] for r in policy_results],              False, "{:.0f}".format),
         ("HB peak P95",      [r["holding_bay"]["peak_bays_p95"] for r in policy_results],False, "{:.1f}".format),
+        ("Overflow",         [r["overflow_total"] for r in policy_results],              False, "{:.0f}".format),
         ("Close hr P95",     [r["holding_bay"]["last_occupied_p95_hours"] for r in policy_results], False, _fmt_hhmm),
         ("Min cost ($)",     [r.get("min_total_cost", float("inf")) for r in policy_results], False, "${:.0f}".format),
     ]
@@ -1205,7 +1205,7 @@ if not run:
 with st.spinner("Running simulation... this may take 30-60 seconds."):
     try:
         timePeriod, summary, policy_results, policy_best = _cached_simulation(
-            scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=12
+            scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=13
         )
     except Exception as e:
         st.error(f"Simulation failed: {e}")

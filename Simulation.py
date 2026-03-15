@@ -598,8 +598,8 @@ def comparePriorityRules(baseParams, priorities=None, saveResults=False):
     ranked = sorted(
         results,
         key=lambda x: (
-            x["overflow_total"],
             x["holding_bay"]["peak_bays_p95"],
+            x["overflow_total"],
             x["holding_bay"]["last_occupied_p95_hours"],
             x["min_total_cost"]
         )
