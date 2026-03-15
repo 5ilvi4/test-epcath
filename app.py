@@ -1679,6 +1679,18 @@ with tab_policy:
             f"→ earliest close time → highest utilization."
         )
 
+        # ── recommended policy detail ──────────────────────────────────────
+        st.subheader("Recommended Policy Detail")
+        st.caption(f"Results for the top-ranked policy: **{policy_best['priority_rule']}**")
+        d1, d2, d3, d4, d5 = st.columns(5)
+        d1.metric("Cath utilization",    f"{round(policy_best['cath_utilization_avg']*100,1)}%")
+        d2.metric("EP utilization",      f"{round(policy_best['ep_utilization_avg']*100,1)}%")
+        d3.metric("Overflow procedures", str(policy_best["overflow_total"]))
+        d4.metric("Recommended HB bays", str(policy_best["holding_bay"]["recommended_bays_p95"]))
+        d5.metric("Recommended close",   _fmt_close(policy_best["holding_bay"]["recommended_close_p95"]))
+
+        st.divider()
+
         # ── visual 1: radar chart ──────────────────────────────────────────
         st.subheader("Multi-Metric Radar Chart (Spider Chart)")
         st.caption(
@@ -1745,7 +1757,10 @@ with tab_policy:
             "on a specific metric."
         )
         policy_df = plot_policy_summary_table(policy_results)
-        st.dataframe(policy_df, width='stretch', hide_index=True)
+        def _highlight_best(row):
+            color = "background-color: #1e3a5f; font-weight: bold;" if row["Priority rule"] == best_rule else ""
+            return [color] * len(row)
+        st.dataframe(policy_df.style.apply(_highlight_best, axis=1), width='stretch', hide_index=True)
 
         st.divider()
 
@@ -1810,17 +1825,6 @@ with tab_policy:
         )
         _show_fig(plot_policy_hb_and_close(policy_results))
 
-        st.divider()
-
-        # ── current run detail ─────────────────────────────────────────────
-        st.subheader("Recommended Policy Detail")
-        st.caption(f"Results for the top-ranked policy: **{policy_best['priority_rule']}**")
-        d1, d2, d3, d4, d5 = st.columns(5)
-        d1.metric("Cath utilization",    f"{round(policy_best['cath_utilization_avg']*100,1)}%")
-        d2.metric("EP utilization",      f"{round(policy_best['ep_utilization_avg']*100,1)}%")
-        d3.metric("Overflow procedures", str(policy_best["overflow_total"]))
-        d4.metric("Recommended HB bays", str(policy_best["holding_bay"]["recommended_bays_p95"]))
-        d5.metric("Recommended close",   _fmt_close(policy_best["holding_bay"]["recommended_close_p95"]))
 
 # ── Tab: Recommendations & Conclusion ─────────────────────────────────────────
 with tab_conclusion:
