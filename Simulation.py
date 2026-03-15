@@ -555,11 +555,14 @@ def comparePriorityRules(baseParams, priorities=None, saveResults=False):
     Run multiple scheduling policies and rank them.
 
     Ranking logic:
-    1. Fewer overflow procedures
-    2. Lower 95th percentile holding-bay peak
-    3. Earlier 95th percentile last occupied time
-    4. Higher average room utilization
+    1. Lower minimum total cost (nurse labor + inpatient admissions)
+    2. Fewer overflow procedures
+    3. Lower 95th percentile holding-bay peak
+    4. Earlier 95th percentile last occupied time
+    5. Higher average room utilization
     '''
+    from CostAnalysis import CloseTimeCostParams, summarize_close_time_decision
+
     if priorities is None:
         priorities = PRIORITY_OPTIONS
 
@@ -582,12 +585,20 @@ def comparePriorityRules(baseParams, priorities=None, saveResults=False):
             printRecommendations=False
         )
 
+        try:
+            _, _, close_rows = buildCostInputsFromSimulation(timePeriod, p)
+            cost_result = summarize_close_time_decision(close_rows, params=CloseTimeCostParams())
+            summary["min_total_cost"] = float(cost_result["cost_recommendation"]["total_cost"])
+        except Exception:
+            summary["min_total_cost"] = float("inf")
+
         summary["priority_rule"] = priorityName
         results.append(summary)
 
     ranked = sorted(
         results,
         key=lambda x: (
+            x["min_total_cost"],
             x["overflow_total"],
             x["holding_bay"]["peak_bays_p95"],
             x["holding_bay"]["last_occupied_p95_hours"],
