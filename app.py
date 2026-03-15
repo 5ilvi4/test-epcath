@@ -1478,6 +1478,16 @@ with tab_close:
     _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
     hb = summary["holding_bay"]
 
+    if "cost_analysis" in summary:
+        ca = summary["cost_analysis"]
+        close_rec = ca["close"]["cost_recommendation"]
+        st.subheader("Close Time Cost Recommendations")
+        cc3, cc4 = st.columns(2)
+        cc3.metric("Cost-minimizing close time", str(close_rec["close_time_hhmm"]))
+        cc4.metric("Estimated total cost", f"${close_rec['total_cost']:.2f}/day")
+
+        st.divider()
+
     st.subheader("Close-time Sensitivity")
     st.caption(
         "Closing the holding bays earlier saves staff cost but risks leaving recovering patients "
@@ -1494,13 +1504,6 @@ with tab_close:
     st.dataframe(close_df.drop(columns=["close_hour"], errors="ignore"), width='stretch')
 
     if "cost_analysis" in summary:
-        st.divider()
-        ca = summary["cost_analysis"]
-        close_rec = ca["close"]["cost_recommendation"]
-        st.subheader("Close Time Cost Recommendations")
-        cc3, cc4 = st.columns(2)
-        cc3.metric("Cost-minimizing close time", str(close_rec["close_time_hhmm"]))
-        cc4.metric("Estimated total cost", f"${close_rec['total_cost']:.2f}/day")
 
         try:
             for key in ["close_time_sensitivity", "close_time_days_with_demand",
