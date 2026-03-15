@@ -1360,19 +1360,6 @@ _CHART_META = {
             "last_occupied_time(d) = max{ t : occupancy(d, t) > 0 }"
         ),
     },
-    "policy_scorecard": {
-        "title": "Policy Comparison — Scorecard",
-        "definition": (
-            "Each metric is min-max normalised to [0, 1] (1 = best policy on that metric). "
-            "Scores are then averaged across all metrics. Higher composite score = better "
-            "overall policy."
-        ),
-        "formula": (
-            "norm(x, metric) = (x − min_metric) / (max_metric − min_metric)\n"
-            "  flipped for metrics where lower is better (overflow, HB peak, close time)\n\n"
-            "composite_score = mean of normalised scores across all KPIs."
-        ),
-    },
 }
 
 # Load baseline for comparison (cached — runs only once)
