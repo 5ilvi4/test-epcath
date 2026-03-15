@@ -271,7 +271,7 @@ def get_baseline_simulation_summary():
     return bsummary
 
 @st.cache_resource(show_spinner=False)
-def _cached_simulation(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=6):
+def _cached_simulation(scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=7):
     """Run simulation once per unique parameter set; result shared across all user sessions."""
     random.seed(30)
     p = make_params(scenario_key, priority_rule, hb_clean_time, num_cath_rooms, resolution)
@@ -756,9 +756,11 @@ def plot_policy_radar(policy_results):
         "Low\nOverflow": [r["overflow_total"] for r in policy_results],   # lower better
         "Low HB\nPeak":  [r["holding_bay"]["peak_bays_p95"] for r in policy_results],  # lower better
         "Early\nClose":  [r["holding_bay"]["last_occupied_p95_hours"] for r in policy_results],  # lower better
+        "Low\nCost":     [r.get("min_total_cost", float("inf")) for r in policy_results],  # lower better
     }
     higher = {"Cath\nUtil": True, "EP\nUtil": True,
-              "Low\nOverflow": False, "Low HB\nPeak": False, "Early\nClose": False}
+              "Low\nOverflow": False, "Low HB\nPeak": False, "Early\nClose": False,
+              "Low\nCost": False}
 
     categories = list(raw.keys())
     N = len(categories)
@@ -803,6 +805,7 @@ def plot_policy_heatmap(policy_results):
         ("Overflow",         [r["overflow_total"] for r in policy_results],              False, "{:.0f}"),
         ("HB peak P95",      [r["holding_bay"]["peak_bays_p95"] for r in policy_results],False, "{:.1f}"),
         ("Close hr P95",     [r["holding_bay"]["last_occupied_p95_hours"] for r in policy_results], False, "{:.2f}"),
+        ("Min cost ($)",     [r.get("min_total_cost", float("inf")) for r in policy_results], False, "${:.0f}"),
     ]
 
     n_policies = len(labels)
@@ -1196,7 +1199,7 @@ if not run:
 with st.spinner("Running simulation... this may take 30-60 seconds."):
     try:
         timePeriod, summary, policy_results, policy_best = _cached_simulation(
-            scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=6
+            scenario_key, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies, _v=7
         )
     except Exception as e:
         st.error(f"Simulation failed: {e}")
