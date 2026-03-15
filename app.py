@@ -1970,27 +1970,11 @@ with tab_conclusion:
     )
 
     if policy_results:
-        _pdf = pd.DataFrame(policy_results)
-        _hb_col = None
-        if "holding_bay" in _pdf.columns:
-            _pdf["_rec_bays"] = _pdf["holding_bay"].apply(lambda x: x.get("recommended_bays_p95", None))
-            _pdf["_close_h"]  = _pdf["holding_bay"].apply(lambda x: x.get("recommended_close_p95", None))
-            _hb_col = "_rec_bays"
-
-        rows_data = []
-        for _, row in _pdf.iterrows():
-            rows_data.append({
-                "Policy":            row["priority_rule"],
-                "Cath util (%)":     f"{row['cath_utilization_avg']*100:.1f}",
-                "EP util (%)":       f"{row['ep_utilization_avg']*100:.1f}",
-                "Overflow":          int(row["overflow_total"]),
-                "Rec. HB bays":      int(row["_rec_bays"]) if _hb_col else "—",
-                "Rec. close time":   _fmt_close(row["_close_h"]) if "_close_h" in row and row["_close_h"] else "—",
-                "Best policy?":      "✓ Recommended" if row["priority_rule"] == rec_policy else "",
-            })
-
-        _summary_df = pd.DataFrame(rows_data)
-        st.dataframe(_summary_df, width="stretch", hide_index=True)
+        _summary_df = plot_policy_summary_table(policy_results)
+        def _highlight_rec(row):
+            color = "background-color: #1e3a5f; font-weight: bold;" if row["Priority rule"] == rec_policy else ""
+            return [color] * len(row)
+        st.dataframe(_summary_df.style.apply(_highlight_rec, axis=1), width="stretch", hide_index=True)
 
         st.success(
             f"**Recommended scheduling policy: {rec_policy}**  \n"
