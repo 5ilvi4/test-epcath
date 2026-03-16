@@ -231,7 +231,7 @@ def _style(ax, grid_axis="y"):
     ax.grid(axis=grid_axis, color=GRID, linewidth=0.6, alpha=0.8)
     ax.set_axisbelow(True)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.spines[["left", "bottom"]].set_color("#2a3547")
+    ax.spines[["left", "bottom"]].set_color(GRID)
     ax.tick_params(length=0, labelsize=9)
 
 # ── data loaders ──────────────────────────────────────────────────────────────
@@ -1021,6 +1021,8 @@ st.markdown(
 # ── sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Parameters")
+    light_mode = st.toggle("☀️ Light mode", value=False)
+    st.divider()
     scenario_label = st.selectbox(
         "Case volume scenario", list(SCENARIOS.keys()),
         help=(
@@ -1079,7 +1081,61 @@ with st.sidebar:
         ),
     )
     st.divider()
-    run = st.button("Run Simulation", type="primary", width='stretch')
+    run = st.button("Run Simulation", type="primary", use_container_width=True)
+
+# ── light / dark mode ─────────────────────────────────────────────────────────
+if light_mode:
+    BG   = "#f8fafc"
+    TEXT = "#1e293b"
+    GRID = "#e2e8f0"
+    C3   = "#64748b"
+    # Patch matplotlib rcParams so charts pick up the light palette
+    matplotlib.rcParams.update({
+        "text.color":        TEXT,
+        "axes.labelcolor":   TEXT,
+        "axes.titlecolor":   TEXT,
+        "xtick.color":       "#475569",
+        "ytick.color":       "#475569",
+        "legend.facecolor":  "#f1f5f9",
+        "legend.edgecolor":  "#cbd5e1",
+        "legend.labelcolor": TEXT,
+    })
+    st.markdown("""
+<style>
+/* ── app background ─────────────────────────────────── */
+.stApp { background-color: #f8fafc !important; }
+[data-testid="stAppViewContainer"] { background-color: #f8fafc !important; }
+[data-testid="stMain"] { background-color: #f8fafc !important; }
+
+/* ── sidebar ────────────────────────────────────────── */
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] > div { background-color: #e2e8f0 !important; }
+
+/* ── text ───────────────────────────────────────────── */
+.stApp, .stApp * { color: #1e293b !important; }
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3 { color: #1e293b !important; }
+
+/* ── tab bar ────────────────────────────────────────── */
+[data-testid="stTabs"] button { background-color: #e2e8f0 !important; color: #1e293b !important; }
+[data-testid="stTabs"] button[aria-selected="true"] { background-color: #cbd5e1 !important; border-bottom: 2px solid #3b82f6 !important; }
+
+/* ── metric cards ───────────────────────────────────── */
+[data-testid="metric-container"] { background-color: #f1f5f9 !important; border: 1px solid #cbd5e1 !important; }
+
+/* ── dataframes ─────────────────────────────────────── */
+[data-testid="stDataFrame"] { background-color: #f1f5f9 !important; }
+
+/* ── expander ───────────────────────────────────────── */
+[data-testid="stExpander"] { background-color: #f1f5f9 !important; border: 1px solid #cbd5e1 !important; }
+
+/* ── info / success / warning boxes ─────────────────── */
+[data-testid="stAlert"] { background-color: #e0f2fe !important; }
+</style>
+""", unsafe_allow_html=True)
 
 # ── load data (always) ────────────────────────────────────────────────────────
 scenario_key = SCENARIOS[scenario_label]
@@ -1127,7 +1183,7 @@ with tab_eda:
     st.subheader("Procedure Duration Summary")
     stats = proc_df.groupby("lab_name")["proc_time_min"].describe().round(1)
     stats.columns = ["Count", "Mean (min)", "Std", "Min", "25%", "Median", "75%", "Max"]
-    st.dataframe(stats, width='stretch')
+    st.dataframe(stats, use_container_width=True)
 
     # ── Shift Data ────────────────────────────────────────────────────────────
     st.divider()
@@ -1157,7 +1213,7 @@ with tab_eda:
         list(COST_ASSUMPTIONS.items()),
         columns=["Parameter", "Value"]
     )
-    st.dataframe(assump_df, width='stretch', hide_index=True)
+    st.dataframe(assump_df, use_container_width=True, hide_index=True)
 
     st.divider()
 
@@ -1523,7 +1579,7 @@ with tab_close:
         "total_bay_hours_after_close": "Total bay-hours after close",
         "average_bay_hours_after_close_per_day": "Avg bay-hours/day after close",
     })
-    st.dataframe(close_df.drop(columns=["close_hour"], errors="ignore"), width='stretch')
+    st.dataframe(close_df.drop(columns=["close_hour"], errors="ignore"), use_container_width=True)
 
     if "cost_analysis" in summary:
 
@@ -1552,7 +1608,7 @@ with tab_close:
                 "admission_cost":       "${:.2f}",
                 "total_cost":           "${:.2f}",
             }),
-            width='stretch',
+            use_container_width=True,
         )
         with st.expander("📐 Column definitions", expanded=False):
             st.markdown("""
@@ -1656,7 +1712,7 @@ with tab_mincost:
                 "total_holding_bay_cost":  "${:.2f}",
                 "pct_days_with_instances": "{:.1%}",
             }),
-            width='stretch',
+            use_container_width=True,
         )
 
 
@@ -1762,7 +1818,7 @@ with tab_policy:
         def _highlight_best(row):
             color = "background-color: #1e3a5f; font-weight: bold;" if row["Priority rule"] == best_rule else ""
             return [color] * len(row)
-        st.dataframe(policy_df.style.apply(_highlight_best, axis=1), width='stretch', hide_index=True)
+        st.dataframe(policy_df.style.apply(_highlight_best, axis=1), use_container_width=True, hide_index=True)
 
         st.divider()
 

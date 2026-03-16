@@ -115,15 +115,16 @@ Each policy is tested with everything else held equal. The one that produces the
 
 ### How to read the app
 
-The app has six tabs:
+The app has seven tabs, each focused on one planning question or one ranking criterion:
 
 | Tab | What you'll find |
 |-----|-----------------|
 | **Data Overview** | Charts about the input data — how many procedures, how long they take, who's working, what recovery times look like. No simulation needed to see this. |
-| **Summary** | After running the simulation: the key numbers at a glance — recommended bay count, room usage rates, number of delayed procedures, recommended closing time. Each metric has a collapsible `📐 Definition & formula` toggle. |
-| **Charts** | Detailed charts: cost curves, utilization trends, overflow breakdown, holding bay demand over time, plus two heatmaps (HB demand by day/time and room schedule by room/time). Every chart has a `📐 Definition & formula` expander. |
-| **Cost Analysis** | The economic trade-off tables with a full "Cost Model Assumptions & Calculation Overview" at the top, column-level definitions under each table, and the formulas behind every recommendation. |
-| **Policy Comparison** | Side-by-side comparison of all five scheduling orders across every metric — composite score, radar chart, heatmap, and metric breakdowns. Enabled by default. |
+| **HB Peak P95** | After running the simulation: holding bay peak demand analysis — recommended bay count, peak distribution histogram, and cost curve. The #1 ranking criterion. |
+| **Overflow** | Procedures that didn't fit into the day — total overflow by policy, overflow breakdown by lab type, and overflow vs holding bay bay count. The #2 ranking criterion. |
+| **Closing Hour** | When the last patient leaves recovery — P95 close time by policy, close-time cost analysis, and cost component breakdown. The #3 ranking criterion. |
+| **Min Cost** | Economic trade-off analysis — current setup vs cost-minimizing recommendation, nursing labor vs inpatient admission cost curves, and holding bay cost table. The #4 ranking criterion. |
+| **Policy Comparison** | Side-by-side comparison of all five scheduling policies — recommended policy detail at the top, radar chart, performance heatmap, and summary table with the top-ranked policy highlighted. Enabled by default. |
 | **Recommendations & Conclusion** | A consolidated summary of all three decisions — bay count, close time, and scheduling policy — with the evidence behind each, in one place. |
 
 ---
@@ -492,82 +493,77 @@ As closing time moves later: labor cost goes up (more hours, more nurses), admis
 
 **Plain English:** When comparing all five scheduling policies, which one "wins"?
 
-The policies are ranked using a priority list — like a tiebreaker system in a competition:
+The policies are ranked using a lexicographic (tiebreaker) sort across four criteria in this exact order:
 
-| Priority | What is compared | Which is better | Why this order |
-|----------|-----------------|-----------------|----------------|
-| 1st | Total overflow (delayed procedures) | Fewer is better | Patient access comes first |
-| 2nd | P95 peak holding bay count | Fewer is better | Fewer required bays = lower capital and staffing cost |
-| 3rd | P95 last occupied time | Earlier is better | Earlier close = lower labor cost |
-| 4th | Mean room utilization | Higher is better | More productive use of rooms |
+| Priority | Metric | Direction | Why this order |
+|----------|--------|-----------|----------------|
+| 1st | **HB Peak P95** — peak simultaneous bay occupancy | Lower is better | Drives the capital cost of the facility; determines how many bays must be built |
+| 2nd | **Overflow** — total procedures that didn't fit the day | Fewer is better | Patient access and care continuity |
+| 3rd | **Closing Hour P95** — when the last patient leaves recovery | Earlier is better | Earlier close = lower nursing labor cost and overtime |
+| 4th | **Min Total Cost** — combined nursing + inpatient admission cost | Lower is better | Economic efficiency once the other criteria are satisfied |
 
-The policy with the fewest overflow procedures wins. If two policies tie on overflow, the one requiring fewer holding bays wins. And so on.
+The policy with the lowest HB Peak P95 wins. If two policies tie on HB peak, the one with fewer overflow procedures wins. If still tied, the earlier close time wins. Cost is the final tiebreaker.
 
 ---
 
 ### Composite Score
 
-**Plain English:** A single 0-to-1 score that summarises how each scheduling policy performs across all metrics at once. Think of it like a school grade: 1.0 is the top of the class, 0.0 is the bottom.
+**Plain English:** A single 0-to-1 score that summarises how each scheduling policy performs across all four ranking metrics at once. Think of it like a school grade: 1.0 is the top of the class, 0.0 is the bottom.
 
 **How it is calculated:**
 
 First, each metric is rescaled so that 1.0 = best policy, 0.0 = worst policy on that metric:
 
 ```
-For metrics where lower is better (overflow, bay count, close time):
+For metrics where lower is better (HB peak, overflow, close time, cost):
   score = (worst value − this policy's value) ÷ (worst value − best value)
-
-For metrics where higher is better (utilization):
-  score = (this policy's value − worst value) ÷ (best value − worst value)
 
 If all policies are identical on a metric:
   score = 1.0 (no difference to distinguish them)
 ```
 
-Then the composite score is the average of all five rescaled scores:
+Then the composite score is the average of all four rescaled scores:
 
 ```
 composite_score = average of (
-  rescaled cath utilization,
-  rescaled EP utilization,
+  rescaled HB Peak P95,
   rescaled overflow,
-  rescaled P95 peak bays,
-  rescaled P95 close time
+  rescaled P95 close time,
+  rescaled min total cost
 )
 ```
 
-**Caveat:** All five metrics are weighted equally. If your team cares more about one metric (e.g., patient access = minimise overflow), don't rely only on the composite score — use the performance heatmap in the Policy Comparison tab to apply your own priorities visually.
+**Caveat:** All four metrics are weighted equally in the composite score. The actual policy ranking uses a lexicographic (tiebreaker) sort, not this average — so the composite score and the rank order can sometimes differ. Use the performance heatmap in the Policy Comparison tab to see each metric individually.
 
 ---
 
 ### Multi-Metric Radar Chart (Spider Chart)
 
-**Plain English:** A spider web diagram that shows all five metrics and all five policies on one chart simultaneously — so you can immediately see which policy is strongest overall and exactly where each policy wins or loses.
+**Plain English:** A spider web diagram that shows all four ranking metrics and all five policies on one chart simultaneously — so you can immediately see which policy is strongest overall and exactly where each policy wins or loses.
 
 #### What it looks like
 
-Imagine a spider web. There are 5 "spokes" radiating from the centre, each representing one metric:
+Imagine a spider web. There are 4 "spokes" radiating from the centre, each representing one ranking metric:
 
-- **Cath utilization** — how busy the Cath rooms are
-- **EP utilization** — how busy the EP rooms are
-- **Overflow** — how many procedures didn't fit into the day
-- **HB peak** — how many recovery bays were needed at the busiest moment
-- **Close time** — what time the last patient left recovery
+- **Low HB Peak** — how few recovery bays were needed at the busiest moment
+- **Low Overflow** — how few procedures didn't fit into the day
+- **Early Close** — how early the last patient left recovery
+- **Low Cost** — how low the combined nursing + inpatient admission cost is
 
 Each scheduling policy is drawn as a coloured polygon connecting its score on each spoke. All five polygons appear on the same chart.
 
 #### How each spoke works
 
-Every spoke runs from **0 at the centre** to **1 at the outer edge**, where **1 always means best on that metric** — regardless of whether the raw number is high or low:
+Every spoke runs from **0 at the centre** to **1 at the outer edge**, where **1 always means best on that metric**. All four ranking metrics follow "lower raw value = better", so:
 
-| Metric | What you want | Who scores 1.0 |
-|--------|--------------|----------------|
-| Utilization | Higher is better | Policy with the highest utilization |
-| Overflow | Lower is better | Policy with the fewest delayed procedures |
-| HB peak | Lower is better | Policy needing the fewest recovery bays |
-| Close time | Earlier is better | Policy where the last patient leaves earliest |
+| Spoke | Raw metric | Who scores 1.0 |
+|-------|-----------|----------------|
+| Low HB Peak | P95 peak simultaneous bay occupancy | Policy needing the fewest recovery bays |
+| Low Overflow | Total procedures delayed out of the day | Policy with the fewest delayed procedures |
+| Early Close | P95 last occupied time | Policy where the last patient leaves earliest |
+| Low Cost | Min total cost (nursing + admissions) | Policy with the lowest combined cost |
 
-This rescaling (min-max normalisation) means you can compare percentages, procedure counts, bay counts, and clock hours all on the same chart — apples to apples.
+This rescaling (min-max normalisation) means you can compare bay counts, procedure counts, clock hours, and dollar amounts all on the same chart — apples to apples.
 
 #### How to read a polygon
 
@@ -575,19 +571,19 @@ This rescaling (min-max normalisation) means you can compare percentages, proced
 - **Point near the centre on a spoke** → weak on that metric
 - **Large polygon overall** → strong across the board
 - **Lopsided polygon** → excels on some metrics but sacrifices others — a visible trade-off
-- **The ideal policy** would fill the entire chart, touching the outer edge on all five spokes simultaneously
+- **The ideal policy** would fill the entire chart, touching the outer edge on all four spokes simultaneously
 
 #### Example
 
-Say Policy A (blue) reaches the outer edge on Utilization and Overflow but collapses toward the centre on Close Time. That means:
-- ✓ It keeps rooms busy and avoids delays
-- ✗ But patients are still in recovery late into the evening
+Say Policy A reaches the outer edge on Low HB Peak and Low Overflow but collapses toward the centre on Early Close. That means:
+- ✓ It keeps bay demand low and avoids delays
+- ✗ But patients are still in recovery late into the evening, driving up nursing overtime
 
-Policy B (orange) might have a smaller but more evenly-shaped polygon — not the best at any single metric, but consistently decent across all five. Which is better depends on what the hospital prioritises most.
+Policy B might have a smaller but more evenly-shaped polygon — not the best at any single metric, but consistently decent across all four. Which is better depends on what the hospital prioritises most.
 
 #### Why no policy fills the whole chart
 
-No policy achieves a perfect pentagon. Improving one metric often worsens another — for example, front-loading long-recovery patients reduces holding bay peak (good) but may push long procedures into the end of the day and increase overflow (bad). The radar chart makes these trade-offs immediately visible, so the planning team can make an informed decision rather than optimising blindly for a single number.
+No policy achieves a perfect square. Improving one metric often worsens another — for example, front-loading long-recovery patients reduces holding bay peak (good) but may push long procedures into the end of the day and increase overflow (bad). The radar chart makes these trade-offs immediately visible.
 
 ---
 
@@ -639,7 +635,7 @@ Fixes the Python path so all modules can be imported regardless of launch locati
 |----------|---------|
 | `SCENARIOS` | Maps human-readable scenario labels to internal keys used by `Params` |
 | `PRIORITY_RULES` | The five scheduling rules shown in the sidebar dropdown |
-| `BG`, `C1`, `C2`, `C3`, `GRID` | Shared dark-theme color palette for all charts |
+| `BG`, `C1`, `C2`, `C3`, `GRID`, `TEXT` | Shared color palette — `C1` = coral red (Cath), `C2` = steel blue (EP). Reassigned at runtime when light mode is toggled on. |
 | `COST_ASSUMPTIONS` | Cost parameters displayed in the Data Overview tab |
 | `CURRENT_HB_COUNT` | The existing plan's bay count (21), used to mark the cost curve |
 | `_CHART_META` | Dict of title, definition, and formula strings for every chart in the Charts tab |
@@ -671,6 +667,7 @@ All chart functions return `matplotlib.figure.Figure` and are rendered with `_sh
 
 | Sidebar control | Default | Effect |
 |-----------------|---------|--------|
+| ☀️ Light mode toggle | Off (dark) | Switches the app and all charts between dark and light theme |
 | Case volume scenario | Historical | Selects input CSV files |
 | Scheduling priority rule | Historical | Sets procedure sort order for the single-run simulation |
 | Cath rooms | 5 | Number of available Cath rooms (valid range: 4–7) |
@@ -687,13 +684,14 @@ Renders without simulation. Shows EDA charts, shift statistics, cost assumptions
 ### 6. Simulation execution and result tabs
 On button click, `_cached_simulation(...)` is called with the current sidebar parameters. On a cache hit (same parameters already computed), results are returned instantly. On a cache miss, the simulation runs and the result is cached for all future sessions with the same parameters.
 
-Results populate five tabs:
+Results populate six tabs:
 
-- **Summary** — key metric cards with `📐 Definition & formula` expanders, HB peak histogram, overflow breakdown, close-time sensitivity chart
-- **Charts** — full figure suite from `VA.build_all_key_figures()` with per-chart `📐 Definition & formula` expanders, plus HB demand heatmap and room schedule heatmap
-- **Cost Analysis** — "Cost Model Assumptions & Calculation Overview" expander at top, cost tables with column-level `📐 Column definitions` expanders, and recommendation metrics
-- **Policy Comparison** — composite score, radar chart, performance heatmap, summary table, metric breakdowns (always runs when "Compare all scheduling policies" is enabled, which is the default)
-- **Recommendations & Conclusion** — consolidated decision summary for all three planning questions with expandable evidence and a written conclusion
+- **HB Peak P95** — HB peak distribution histogram, recommended bay count, and holding bay cost curve. Corresponds to ranking criterion #1.
+- **Overflow** — overflow bar chart by policy and lab type, overflow vs holding bay count chart. Corresponds to ranking criterion #2.
+- **Closing Hour** — close-time cost recommendations, total daily cost vs close time, cost components vs close time. Corresponds to ranking criterion #3.
+- **Min Cost** — current setup vs cost-minimizing recommendation chart, holding bay cost table, full cost model assumptions. Corresponds to ranking criterion #4.
+- **Policy Comparison** — recommended policy detail at the top (highlighted), radar chart, performance heatmap, summary table with best row highlighted, procedure delay bar chart. Runs when "Compare all scheduling policies" is enabled (default).
+- **Recommendations & Conclusion** — consolidated decision summary for all three planning questions with expandable evidence and a written conclusion.
 
 ### Concurrency and performance notes
 
