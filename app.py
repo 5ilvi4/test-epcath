@@ -836,7 +836,7 @@ def plot_policy_heatmap(policy_results):
 
     # policy_results is already ranked best-first by comparePriorityRules — preserve that order
     fig, ax = plt.subplots(figsize=(max(6, n_policies * 1.8), n_metrics * 0.9 + 1.5), facecolor=BG)
-    im = ax.imshow(score_matrix, cmap="Reds", vmin=0, vmax=1, aspect="auto")
+    im = ax.imshow(score_matrix, cmap="RdYlGn", vmin=0, vmax=1, aspect="auto")
 
     ax.set_xticks(range(n_policies))
     ax.set_xticklabels(labels, fontsize=9, rotation=20, ha="right")
@@ -847,11 +847,11 @@ def plot_policy_heatmap(policy_results):
     for row in range(n_metrics):
         for col in range(n_policies):
             brightness = score_matrix[row, col]
-            txt_color = "white" if brightness > 0.55 else "#1a2233"
+            txt_color = "white" if brightness > 0.75 or brightness < 0.25 else "#1a2233"
             ax.text(col, row, cell_text[row][col],
                     ha="center", va="center", fontsize=9, color=txt_color, fontweight="bold")
 
-    ax.set_title("Performance heatmap — darker red = better on each metric",
+    ax.set_title("Performance heatmap — green = best, yellow = middle, red = worst",
                  fontsize=11, fontweight="bold", loc="left")
     fig.tight_layout()
     return fig
@@ -957,7 +957,7 @@ def plot_hb_heatmap(hb_cost_df):
             cell_text[row][c] = fmt(lbl, val)
 
     fig, ax = plt.subplots(figsize=(max(8, n_bays * 1.2), n_metrics * 0.9 + 1.5), facecolor=BG)
-    ax.imshow(score_matrix, cmap="Reds", vmin=0, vmax=1, aspect="auto")
+    ax.imshow(score_matrix, cmap="RdYlGn", vmin=0, vmax=1, aspect="auto")
 
     ax.set_xticks(range(n_bays))
     ax.set_xticklabels(hb_labels, fontsize=9, rotation=30, ha="right")
@@ -968,11 +968,11 @@ def plot_hb_heatmap(hb_cost_df):
     for row in range(n_metrics):
         for col in range(n_bays):
             brightness = score_matrix[row, col]
-            txt_color  = "white" if brightness > 0.55 else TEXT
+            txt_color  = "white" if brightness > 0.75 or brightness < 0.25 else "#1a2233"
             ax.text(col, row, cell_text[row][col],
                     ha="center", va="center", fontsize=8, color=txt_color)
 
-    ax.set_title("Holding bay options — darker red = better on each metric",
+    ax.set_title("Holding bay options — green = best, yellow = middle, red = worst",
                  fontsize=11, fontweight="bold", loc="left", color=TEXT)
     fig.tight_layout()
     return fig
@@ -1723,7 +1723,7 @@ with tab_overflow:
             "Each holding bay option scored across five metrics: lost contribution margin / foregone revenue, empty bay cost, "
             "total cost, overcapacity days (service constraint), and **wait time** "
             "(avg overcapacity instances/day — patient satisfaction). "
-            "All metrics are normalised — **darker red / outer edge = better**. "
+            "All metrics are normalised — **green = best, yellow = middle, red = worst**. "
             "The star (★) marks the cost-minimizing option."
         )
 
