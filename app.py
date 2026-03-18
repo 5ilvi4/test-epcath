@@ -930,11 +930,11 @@ def plot_hb_heatmap(hb_cost_df):
     """Heatmap: rows = HB count options, columns = 4 metrics. Darker red = better."""
     df = hb_cost_df.copy()
     metrics_cfg = [
-        ("Lost Contribution\nMargin / Foregone\nRevenue ($/day)",  "cancellation_cost",       False),
-        ("Empty Bay\nCost ($/day)",     "empty_holding_bay_cost",  False),
-        ("Total\nCost ($/day)",         "total_holding_bay_cost",  False),
-        ("Overcapacity\nDays",          "days_with_instances",     False),
-        ("Wait Time\n(blocks/day)",     "avg_instances_per_day",   False),
+        ("Lost Contribution\nMargin / Foregone\nRevenue ($/day)",  "cancellation_cost",      False, "${:.2f}".format),
+        ("Empty Bay\nCost ($/day)",                                "empty_holding_bay_cost", False, "${:.2f}".format),
+        ("Total\nCost ($/day)",                                    "total_holding_bay_cost", False, "${:.2f}".format),
+        ("Overcapacity\nDays",                                     "days_with_instances",    False, "{:.0f}".format),
+        ("Wait Time\n(blocks/day)",                                "avg_instances_per_day",  False, "{:.2f}".format),
     ]
     # Filter to columns that exist
     metrics_cfg = [m for m in metrics_cfg if m[1] in df.columns]
@@ -943,18 +943,13 @@ def plot_hb_heatmap(hb_cost_df):
     n_metrics = len(metrics_cfg)
 
     score_matrix = np.zeros((n_metrics, n_bays))
-    for row, (_, col, hib) in enumerate(metrics_cfg):
+    for row, (_, col, hib, _fmt) in enumerate(metrics_cfg):
         score_matrix[row] = _norm(df[col].tolist(), higher_is_better=hib)
 
-    def fmt(label, val):
-        if "Cost" in label:
-            return f"${val:,.0f}"
-        return str(int(val))
-
     cell_text = [[None] * n_bays for _ in range(n_metrics)]
-    for row, (lbl, col, _) in enumerate(metrics_cfg):
+    for row, (_, col, _, _fmt) in enumerate(metrics_cfg):
         for c, val in enumerate(df[col]):
-            cell_text[row][c] = fmt(lbl, val)
+            cell_text[row][c] = _fmt(val)
 
     fig, ax = plt.subplots(figsize=(max(8, n_bays * 1.2), n_metrics * 0.9 + 1.5), facecolor=BG)
     ax.imshow(score_matrix, cmap="RdYlGn", vmin=0, vmax=1, aspect="auto")
