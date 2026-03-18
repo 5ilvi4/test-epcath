@@ -453,7 +453,7 @@ def plot_cost_curve(cost_table):
         df["hb_count"],
         df["cancellation_cost"],
         df["empty_holding_bay_cost"],
-        labels=["Cancellation cost", "Empty bay cost"],
+        labels=["Lost Contribution Margin / Foregone Revenue", "Empty bay cost"],
         colors=[_CANCEL_CLR, _EMPTY_CLR],
         alpha=0.75,
     )
@@ -592,7 +592,7 @@ def plot_room_schedule_heatmap(summary, resolution=5):
     tick_labels = [f"{7 + k * 2}:00" for k in range(len(tick_pos))]
 
     fig, ax = plt.subplots(figsize=(12, max(3, n_rooms * 0.55 + 1.5)), facecolor=BG)
-    im = ax.imshow(matrix, aspect="auto", cmap="Blues",
+    im = ax.imshow(matrix, aspect="auto", cmap="Reds",
                    interpolation="nearest", origin="upper", vmin=0, vmax=100)
     cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
     cbar.set_label("% of days occupied", color=TEXT, fontsize=9)
@@ -810,17 +810,15 @@ def plot_policy_heatmap(policy_results):
     """Color-coded heatmap: policies × KPIs, green = better, red = worse."""
     labels = [r["priority_rule"] for r in policy_results]
 
-    def _fmt_hhmm(h):
-        total = int(round(h * 60))
-        hh, mm = total // 60, total % 60
-        suffix = "+" if hh >= 24 else ""
-        return f"{hh % 24:02d}:{mm:02d}{suffix}"
+    def _days_over_rec(r):
+        peaks = r["holding_bay"].get("daily_peak_bays", [])
+        rec   = r["holding_bay"].get("recommended_bays_p95", 0)
+        return sum(1 for p in peaks if p > rec)
 
     metrics_cfg = [
-        ("HB peak P95",      [r["holding_bay"]["peak_bays_p95"] for r in policy_results],False, "{:.1f}".format),
-        ("Overflow",         [r["overflow_total"] for r in policy_results],              False, "{:.0f}".format),
-        ("Close hr P95",     [r["holding_bay"]["last_occupied_p95_hours"] for r in policy_results], False, _fmt_hhmm),
-        ("Min cost ($)",     [r.get("min_total_cost", float("inf")) for r in policy_results], False, "${:.0f}".format),
+        ("HB peak P95",                    [r["holding_bay"]["peak_bays_p95"] for r in policy_results], False, "{:.1f}".format),
+        ("Overflow",                       [r["overflow_total"] for r in policy_results],               False, "{:.0f}".format),
+        ("Overcap Days\n(days > rec bays)", [_days_over_rec(r) for r in policy_results],                False, "{:.0f}".format),
     ]
 
     n_policies = len(labels)
@@ -838,7 +836,7 @@ def plot_policy_heatmap(policy_results):
 
     # policy_results is already ranked best-first by comparePriorityRules — preserve that order
     fig, ax = plt.subplots(figsize=(max(6, n_policies * 1.8), n_metrics * 0.9 + 1.5), facecolor=BG)
-    im = ax.imshow(score_matrix, cmap="Blues", vmin=0, vmax=1, aspect="auto")
+    im = ax.imshow(score_matrix, cmap="Reds", vmin=0, vmax=1, aspect="auto")
 
     ax.set_xticks(range(n_policies))
     ax.set_xticklabels(labels, fontsize=9, rotation=20, ha="right")
@@ -853,7 +851,7 @@ def plot_policy_heatmap(policy_results):
             ax.text(col, row, cell_text[row][col],
                     ha="center", va="center", fontsize=9, color=txt_color, fontweight="bold")
 
-    ax.set_title("Performance heatmap — darker blue = better on each metric",
+    ax.set_title("Performance heatmap — darker red = better on each metric",
                  fontsize=11, fontweight="bold", loc="left")
     fig.tight_layout()
     return fig
@@ -892,6 +890,147 @@ def plot_policy_composite_score(policy_results):
                  fontsize=11, fontweight="bold", loc="left")
     ax.set_xlabel("Score (0 = worst, 1 = best)")
     _style(ax, "x")
+    fig.tight_layout()
+    return fig
+
+
+# ── HB count comparison charts ────────────────────────────────────────────────
+def plot_hb_wait_time(hb_cost_df):
+    """Bar chart: avg overcapacity instances/day by HB count (patient wait time proxy)."""
+    df = hb_cost_df.copy()
+    if "avg_instances_per_day" not in df.columns:
+        return None
+    hb_vals  = df["hb_count"].tolist()
+    wait_vals = df["avg_instances_per_day"].tolist()
+    best_idx  = df["total_holding_bay_cost"].idxmin()
+    best_hb   = int(df.loc[best_idx, "hb_count"])
+    colors = [C1 if int(h) == best_hb else C3 for h in hb_vals]
+
+    fig, ax = plt.subplots(figsize=(max(8, len(hb_vals) * 1.0), 4), facecolor=BG)
+    bars = ax.bar([str(int(h)) for h in hb_vals], wait_vals, color=colors, width=0.6, alpha=0.9)
+    ax.bar_label(bars, fmt="%.2f", padding=3, fontsize=8, color=TEXT)
+    ax.axhline(0, color=C3, linewidth=0.5)
+    ax.set_xlabel("Holding Bay Count", color=TEXT)
+    ax.set_ylabel("Avg excess patient-slots / day (count, not minutes)", color=TEXT)
+    ax.set_title(
+        "Overcapacity Pressure — avg daily excess patient-slots above bay capacity\n"
+        "Each unit = one patient above capacity at peak moment, averaged over 260 days  |  ★ = cost-minimizing option",
+        fontsize=10, fontweight="bold", loc="left", color=TEXT
+    )
+    # Mark cost-minimizing bar with star
+    for i, h in enumerate(hb_vals):
+        if int(h) == best_hb:
+            ax.text(i, wait_vals[i] + max(wait_vals) * 0.03, "★", ha="center", fontsize=12, color=C1)
+    _style(ax, "y")
+    fig.tight_layout()
+    return fig
+
+
+def plot_hb_heatmap(hb_cost_df):
+    """Heatmap: rows = HB count options, columns = 4 metrics. Darker red = better."""
+    df = hb_cost_df.copy()
+    metrics_cfg = [
+        ("Lost Contribution\nMargin / Foregone\nRevenue ($/day)",  "cancellation_cost",       False),
+        ("Empty Bay\nCost ($/day)",     "empty_holding_bay_cost",  False),
+        ("Total\nCost ($/day)",         "total_holding_bay_cost",  False),
+        ("Overcapacity\nDays",          "days_with_instances",     False),
+        ("Wait Time\n(blocks/day)",     "avg_instances_per_day",   False),
+    ]
+    # Filter to columns that exist
+    metrics_cfg = [m for m in metrics_cfg if m[1] in df.columns]
+    hb_labels = [str(int(v)) + " bays" for v in df["hb_count"]]
+    n_bays    = len(hb_labels)
+    n_metrics = len(metrics_cfg)
+
+    score_matrix = np.zeros((n_metrics, n_bays))
+    for row, (_, col, hib) in enumerate(metrics_cfg):
+        score_matrix[row] = _norm(df[col].tolist(), higher_is_better=hib)
+
+    def fmt(label, val):
+        if "Cost" in label:
+            return f"${val:,.0f}"
+        return str(int(val))
+
+    cell_text = [[None] * n_bays for _ in range(n_metrics)]
+    for row, (lbl, col, _) in enumerate(metrics_cfg):
+        for c, val in enumerate(df[col]):
+            cell_text[row][c] = fmt(lbl, val)
+
+    fig, ax = plt.subplots(figsize=(max(8, n_bays * 1.2), n_metrics * 0.9 + 1.5), facecolor=BG)
+    ax.imshow(score_matrix, cmap="Reds", vmin=0, vmax=1, aspect="auto")
+
+    ax.set_xticks(range(n_bays))
+    ax.set_xticklabels(hb_labels, fontsize=9, rotation=30, ha="right")
+    ax.set_yticks(range(n_metrics))
+    ax.set_yticklabels([m[0] for m in metrics_cfg], fontsize=9)
+    ax.tick_params(length=0)
+
+    for row in range(n_metrics):
+        for col in range(n_bays):
+            brightness = score_matrix[row, col]
+            txt_color  = "white" if brightness > 0.55 else TEXT
+            ax.text(col, row, cell_text[row][col],
+                    ha="center", va="center", fontsize=8, color=txt_color)
+
+    ax.set_title("Holding bay options — darker red = better on each metric",
+                 fontsize=11, fontweight="bold", loc="left", color=TEXT)
+    fig.tight_layout()
+    return fig
+
+
+def plot_hb_radar(hb_cost_df):
+    """Radar/spider chart: each HB count option as a polygon across 4 normalised metrics."""
+    import math
+    df = hb_cost_df.copy()
+    metrics_cfg = [
+        ("Lost Contribution\nMargin /\nForegone Revenue",  "cancellation_cost",      False),
+        ("Low\nEmpty Cost",   "empty_holding_bay_cost", False),
+        ("Low\nTotal Cost",   "total_holding_bay_cost", False),
+        ("Low\nOvercap Days", "days_with_instances",    False),
+        ("Low\nWait Time",    "avg_instances_per_day",  False),
+    ]
+    metrics_cfg = [m for m in metrics_cfg if m[1] in df.columns]
+    spoke_labels = [m[0] for m in metrics_cfg]
+    n_spokes = len(spoke_labels)
+    angles = [2 * math.pi * i / n_spokes for i in range(n_spokes)]
+    angles += angles[:1]   # close the polygon
+
+    normed = {}
+    for lbl, col, hib in metrics_cfg:
+        normed[col] = _norm(df[col].tolist(), higher_is_better=hib)
+
+    hb_values = df["hb_count"].tolist()
+    palette = plt.cm.tab10(np.linspace(0, 0.9, len(hb_values)))
+
+    # Highlight the cost-minimizing row
+    best_idx = df["total_holding_bay_cost"].idxmin()
+    best_hb  = int(df.loc[best_idx, "hb_count"])
+
+    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw={"polar": True}, facecolor=BG)
+    ax.set_facecolor(BG)
+
+    for i, hb in enumerate(hb_values):
+        scores = [normed[col][i] for _, col, _ in metrics_cfg]
+        scores += scores[:1]
+        lw  = 2.5 if int(hb) == best_hb else 1.0
+        alp = 0.9 if int(hb) == best_hb else 0.5
+        lbl = f"{int(hb)} bays ★" if int(hb) == best_hb else f"{int(hb)} bays"
+        ax.plot(angles, scores, color=palette[i], linewidth=lw, alpha=alp, label=lbl)
+        ax.fill(angles, scores, color=palette[i], alpha=0.08 if int(hb) == best_hb else 0.03)
+
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(spoke_labels, fontsize=10, color=TEXT)
+    ax.set_yticks([0.25, 0.5, 0.75, 1.0])
+    ax.set_yticklabels(["0.25", "0.5", "0.75", "1.0"], fontsize=7, color=C3)
+    ax.set_ylim(0, 1)
+    ax.tick_params(colors=C3)
+    ax.spines["polar"].set_color(C3)
+    ax.grid(color=C3, alpha=0.3)
+
+    ax.set_title(f"HB options — outer edge = best on each metric\n★ = cost-minimizing ({best_hb} bays)",
+                 fontsize=11, fontweight="bold", color=TEXT, pad=20)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.35, 1.15), fontsize=8,
+              framealpha=0.2, labelcolor=TEXT, facecolor=BG)
     fig.tight_layout()
     return fig
 
@@ -1291,14 +1430,14 @@ _CHART_META = {
         "title": "Holding Bay — Total Daily Cost vs Bay Count",
         "definition": (
             "Estimated total daily cost of holding-bay operations at each candidate bay count, "
-            "balancing the cost of turning patients away (too few bays = cancellations) against "
+            "balancing the lost contribution margin / foregone revenue (too few bays = unaccommodated procedures) against "
             "idle capacity (too many bays = empty-bay waste)."
         ),
         "formula": (
-            "total_cost = cancellation_cost + empty_bay_cost\n\n"
-            "cancellation_cost  = (avg_overcapacity_5min_blocks/day ÷ 12)  × $600\n"
-            "empty_bay_cost     = avg_empty_bay_hours/day                  × $10\n\n"
-            "Assumptions: $600 contribution margin per cancelled procedure;\n"
+            "total_cost = lost_contribution_margin + empty_bay_cost\n\n"
+            "lost_contribution_margin  = (avg_overcapacity_5min_blocks/day ÷ 12)  × $600\n"
+            "empty_bay_cost            = avg_empty_bay_hours/day                  × $10\n\n"
+            "Assumptions: $600 contribution margin per procedure (foregone revenue when overcapacity);\n"
             "             $10 per idle bay-hour."
         ),
     },
@@ -1310,8 +1449,8 @@ _CHART_META = {
             "where the two curves cross."
         ),
         "formula": (
-            "cancellation_cost  = (avg_overcapacity_5min_blocks/day ÷ 12) × $600\n"
-            "empty_bay_cost     = avg_empty_bay_hours/day × $10\n\n"
+            "lost_contribution_margin  = (avg_overcapacity_5min_blocks/day ÷ 12) × $600\n"
+            "empty_bay_cost            = avg_empty_bay_hours/day × $10\n\n"
             "overcapacity_5min_block = one 5-min interval where demand > available bays;\n"
             "empty_bay_hour          = one bay-hour with zero occupancy."
         ),
@@ -1536,6 +1675,81 @@ with tab_overflow:
         except Exception as e:
             st.error(f"Chart failed: {e}")
 
+    if "cost_analysis" in summary:
+        ca_ov = summary["cost_analysis"]
+        _hb_df = ca_ov["hb"]["cost_table"].copy()
+        _merge_cols = [c for c in ["days_with_instances", "avg_instances_per_day"]
+                       if c in cost_table_baseline.columns and c not in _hb_df.columns]
+        if _merge_cols:
+            _hb_df = _hb_df.merge(
+                cost_table_baseline[["hb_count"] + _merge_cols], on="hb_count", how="left"
+            )
+
+        st.divider()
+
+        # ── Overcapacity Pressure by Bay Count ────────────────────────────────
+        st.subheader("Overcapacity Pressure by Bay Count")
+        st.caption(
+            "**What it measures:** The average number of *excess patient-slots* per day — "
+            "i.e., how many patients above capacity existed at the daily peak moment, "
+            "averaged over all 260 operating days. "
+            "**This is not in minutes or hours.** It is a dimensionless count: "
+            "a value of 0.34 means that across all days, the peak overcrowding averaged 0.34 extra patients above capacity. "
+            "Lower = less congestion pressure = better patient experience."
+        )
+        st.caption(
+            "**Formula:** `avg_excess_patients/day = Σ max(0, daily_peak − bay_count) ÷ 260 days`  \n"
+            "Where `daily_peak` = maximum simultaneous occupancy recorded on that day."
+        )
+
+        _wt_fig = plot_hb_wait_time(_hb_df)
+        if _wt_fig:
+            _show_fig(_wt_fig)
+
+        if "avg_instances_per_day" in _hb_df.columns:
+            _threshold_row = _hb_df[_hb_df["avg_instances_per_day"] <= 0.10]
+            if not _threshold_row.empty:
+                _wt_rec = int(_threshold_row.iloc[0]["hb_count"])
+                st.info(
+                    f"**Wait-time threshold:** {_wt_rec} bays reduces avg overcapacity instances "
+                    f"to ≤ 0.10/day — effectively eliminating patient congestion on a typical day."
+                )
+
+        st.divider()
+
+        # ── Holding Bay Count — Multi-Metric Comparison ───────────────────────
+        st.subheader("Holding Bay Count — Multi-Metric Comparison")
+        st.caption(
+            "Each holding bay option scored across five metrics: lost contribution margin / foregone revenue, empty bay cost, "
+            "total cost, overcapacity days (service constraint), and **wait time** "
+            "(avg overcapacity instances/day — patient satisfaction). "
+            "All metrics are normalised — **darker red / outer edge = better**. "
+            "The star (★) marks the cost-minimizing option."
+        )
+
+        _hb_df_focus = _hb_df[_hb_df["hb_count"].isin([17, 18, 19, 20, 21])].copy()
+
+        col_h, col_r = st.columns([1, 1])
+        with col_h:
+            st.markdown("**Performance Heatmap**")
+            _show_fig(plot_hb_heatmap(_hb_df_focus))
+        with col_r:
+            st.markdown("**Radar Chart**")
+            _show_fig(plot_hb_radar(_hb_df_focus))
+
+        with st.expander("📐 Metric definitions & formulas", expanded=False):
+            st.markdown("""
+| Metric | Definition | Formula | Direction |
+|---|---|---|---|
+| **Lost Contribution Margin / Foregone Revenue ($/day)** | Estimated daily foregone revenue from procedures that could not be accommodated due to bay overcapacity. Each overcapacity patient-slot is treated as a fraction of a lost procedure worth $600 in contribution margin. | `lost_margin = avg_instances/day × (5 min ÷ 60) × $600` | Lower = better |
+| **Empty Bay Cost ($/day)** | Estimated daily cost of idle holding bay capacity — bays that exist but have no patient in them. Each idle bay-hour costs $10 (opportunity cost of capital and staffing). | `empty_cost = avg_empty_bay_hours/day × $10` | Lower = better |
+| **Total Cost ($/day)** | Sum of lost contribution margin and empty bay cost. This is the primary optimisation criterion — it captures the trade-off between under-provisioning (foregone revenue) and over-provisioning (waste). The optimal bay count minimises this combined cost. | `total_cost = lost_margin + empty_cost` | Lower = better — **minimised at 18 bays** |
+| **Overcapacity Days** | Number of the 260 simulated operating days on which demand exceeded the available bay count at least once. The service constraint requires this to be ≤ 5% of days (≤ 13 days out of 260). | `overcap_days = count of days where max_occupancy > bay_count` | Lower = better — **service constraint: ≤ 13 days** |
+| **Overcapacity Pressure (excess patients/day)** | Average number of *excess patients above bay capacity* at the daily peak, averaged over 260 days. **Not in minutes** — it is a dimensionless count of crowding magnitude. A value of 0.34 means the peak overcrowding averaged 0.34 extra patients above capacity per day. Proposed as a patient satisfaction proxy to avoid artificial dollar cost imputation. | `pressure = Σ max(0, daily_peak − bay_count) ÷ 260 days` | Lower = better — **near-zero at 18 bays (0.12/day)** |
+
+**Note on normalisation:** All five metrics are min-max normalised to [0, 1] before display in the heatmap and radar. A score of 1.0 (darkest red / outermost spoke) always means *best on that metric*, regardless of the raw direction. This allows direct visual comparison across metrics with different units.
+""")
+
 
 # ── Tab: Closing Hour ─────────────────────────────────────────────────────────
 with tab_close:
@@ -1622,6 +1836,7 @@ with tab_close:
 """)
 
 
+
 # ── Tab: Min Cost ──────────────────────────────────────────────────────────────
 with tab_mincost:
     _show_run_config(scenario_label, priority_rule, num_cath_rooms, hb_clean_time, resolution, compare_policies)
@@ -1653,7 +1868,8 @@ with tab_mincost:
         st.subheader("Current Setup vs Cost-Minimizing Recommendation")
         st.caption(
             "The existing plan uses 21 holding bays. The chart below shows how cost changes "
-            "as bay count varies — too few bays causes cancellations, too many wastes money on idle space."
+            "as bay count varies — too few bays results in lost contribution margin (foregone revenue) "
+            "from procedures that cannot be accommodated, too many wastes money on idle space."
         )
         _show_fig(plot_cost_curve(cost_table_baseline))
         cur_row  = cost_table_baseline[cost_table_baseline["hb_count"] == CURRENT_HB_COUNT]
@@ -1678,7 +1894,7 @@ with tab_mincost:
 
 | Parameter | Value | Source |
 |---|---|---|
-| Contribution margin per cancelled procedure | $600 | Case assumption |
+| Contribution margin per procedure (foregone revenue when overcapacity) | $600 | Case assumption |
 | Empty holding-bay cost per idle hour | $10 | Case assumption |
 | Base nursing wage | $48 / hr | Case assumption |
 | Overtime multiplier | 1.5× ($72 / hr) | Case assumption |
@@ -1705,15 +1921,20 @@ with tab_mincost:
             st.error(f"Chart failed: {e}")
 
         st.subheader("Holding Bay Cost Table")
-        st.dataframe(
-            ca["hb"]["cost_table"].style.format({
-                "cancellation_cost":       "${:.2f}",
-                "empty_holding_bay_cost":  "${:.2f}",
-                "total_holding_bay_cost":  "${:.2f}",
-                "pct_days_with_instances": "{:.1%}",
-            }),
-            use_container_width=True,
-        )
+        _ct = ca["hb"]["cost_table"].copy()
+        if "avg_instances_per_day" in cost_table_baseline.columns and "avg_instances_per_day" not in _ct.columns:
+            _ct = _ct.merge(cost_table_baseline[["hb_count", "avg_instances_per_day"]], on="hb_count", how="left")
+        _fmt = {
+            "cancellation_cost":       "${:.2f}",
+            "empty_holding_bay_cost":  "${:.2f}",
+            "total_holding_bay_cost":  "${:.2f}",
+            "pct_days_with_instances": "{:.1%}",
+        }
+        if "avg_instances_per_day" in _ct.columns:
+            _fmt["avg_instances_per_day"] = "{:.2f} blocks/day"
+        st.caption("avg_instances_per_day = avg 5-min overcapacity blocks per operating day (patient wait time proxy)")
+        st.dataframe(_ct.style.format(_fmt), use_container_width=True)
+
 
 
 # ── Tab: Policy Comparison ────────────────────────────────────────────────────
@@ -2030,7 +2251,7 @@ with tab_conclusion:
         def _highlight_rec(row):
             color = "background-color: #1e3a5f; font-weight: bold;" if row["Priority rule"] == rec_policy else ""
             return [color] * len(row)
-        st.dataframe(_summary_df.style.apply(_highlight_rec, axis=1), width="stretch", hide_index=True)
+        st.dataframe(_summary_df.style.apply(_highlight_rec, axis=1), use_container_width=True, hide_index=True)
 
         st.success(
             f"**Recommended scheduling policy: {rec_policy}**  \n"

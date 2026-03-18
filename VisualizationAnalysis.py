@@ -314,7 +314,7 @@ def plot_hb_total_cost(summary):
 def plot_hb_cost_components(summary):
     df = summary["cost_analysis"]["hb"]["cost_table"].copy().sort_values("hb_count")
     fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
-    ax.bar(df["hb_count"], df["cancellation_cost"], label="Cancellation cost", color=ACCENT)
+    ax.bar(df["hb_count"], df["cancellation_cost"], label="Lost Contribution Margin / Foregone Revenue", color=ACCENT)
     ax.bar(df["hb_count"], df["empty_holding_bay_cost"], bottom=df["cancellation_cost"], label="Empty-bay cost", color=BENCHMARK)
     _title_block(ax, "Holding-bay cost components")
     ax.set_xlabel("Number of holding bays")
