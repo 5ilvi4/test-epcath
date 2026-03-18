@@ -930,7 +930,6 @@ def plot_hb_heatmap(hb_cost_df):
     """Heatmap: rows = HB count options, columns = 4 metrics. Darker red = better."""
     df = hb_cost_df.copy()
     metrics_cfg = [
-        ("Lost Contribution\nMargin / Foregone\nRevenue ($/day)",  "cancellation_cost",      False, "${:.2f}".format),
         ("Empty Bay\nCost ($/day)",                                "empty_holding_bay_cost", False, "${:.2f}".format),
         ("Total\nCost ($/day)",                                    "total_holding_bay_cost", False, "${:.2f}".format),
         ("Overcapacity\nDays",                                     "days_with_instances",    False, "{:.0f}".format),
@@ -978,7 +977,6 @@ def plot_hb_radar(hb_cost_df):
     import math
     df = hb_cost_df.copy()
     metrics_cfg = [
-        ("Lost Contribution\nMargin /\nForegone Revenue",  "cancellation_cost",      False),
         ("Low\nEmpty Cost",   "empty_holding_bay_cost", False),
         ("Low\nTotal Cost",   "total_holding_bay_cost", False),
         ("Low\nOvercap Days", "days_with_instances",    False),
@@ -1715,7 +1713,7 @@ with tab_overflow:
         # ── Holding Bay Count — Multi-Metric Comparison ───────────────────────
         st.subheader("Holding Bay Count — Multi-Metric Comparison")
         st.caption(
-            "Each holding bay option scored across five metrics: lost contribution margin / foregone revenue, empty bay cost, "
+            "Each holding bay option scored across four metrics: empty bay cost, "
             "total cost, overcapacity days (service constraint), and **wait time** "
             "(avg overcapacity instances/day — patient satisfaction). "
             "All metrics are normalised — **green = best, yellow = middle, red = worst**. "
