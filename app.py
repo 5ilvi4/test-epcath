@@ -1418,7 +1418,7 @@ with st.spinner("Running simulation... this may take 30-60 seconds."):
 st.success("Simulation complete!")
 
 # ── Apply theme to all VA charts ───────────────────────────────────────────────
-VA.set_theme(st.get_option("theme.base") or "dark")
+VA.set_theme("light" if light_mode else "dark")
 
 # ── Per-chart definitions & formulas ──────────────────────────────────────────
 _CHART_META = {
