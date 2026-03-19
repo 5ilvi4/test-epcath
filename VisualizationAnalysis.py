@@ -39,9 +39,40 @@ TEXT = "#e2e8f0"
 BG = "#1a2233"
 SUBTEXT = "#7a8ba0"
 
+_DARK  = dict(BG="#1a2233", TEXT="#e2e8f0", GRID="#2a3547", SUBTEXT="#7a8ba0",
+              ACCENT="#5b9bd5", BENCHMARK="#7a8ba0", ALTERNATIVE="#4a5a70",
+              LEGEND_FC="#1a2233", LEGEND_EC="#2a3547", LEGEND_TC="#e2e8f0")
+_LIGHT = dict(BG="#ffffff",  TEXT="#1a2233", GRID="#dee2e6", SUBTEXT="#6c757d",
+              ACCENT="#2468a8", BENCHMARK="#5a7a9a", ALTERNATIVE="#3a5a80",
+              LEGEND_FC="#ffffff", LEGEND_EC="#cccccc", LEGEND_TC="#1a2233")
+
+LEGEND_FC = _DARK["LEGEND_FC"]
+LEGEND_EC = _DARK["LEGEND_EC"]
+LEGEND_TC = _DARK["LEGEND_TC"]
+
+
+def set_theme(mode: str = "dark"):
+    """Call once per render cycle from app.py: VA.set_theme(st.get_option('theme.base'))"""
+    global PRIMARY, SECONDARY, ACCENT, BENCHMARK, ALTERNATIVE, GRID, TEXT, BG, SUBTEXT
+    global LEGEND_FC, LEGEND_EC, LEGEND_TC
+    palette = _LIGHT if mode == "light" else _DARK
+    BG          = palette["BG"]
+    TEXT        = palette["TEXT"]
+    GRID        = palette["GRID"]
+    SUBTEXT     = palette["SUBTEXT"]
+    ACCENT      = palette["ACCENT"]
+    BENCHMARK   = palette["BENCHMARK"]
+    ALTERNATIVE = palette["ALTERNATIVE"]
+    PRIMARY     = ACCENT
+    SECONDARY   = ACCENT
+    LEGEND_FC   = palette["LEGEND_FC"]
+    LEGEND_EC   = palette["LEGEND_EC"]
+    LEGEND_TC   = palette["LEGEND_TC"]
+
 
 def _style_axes(ax, grid_axis="x"):
     ax.set_facecolor(BG)
+    ax.figure.set_facecolor(BG)
     if grid_axis == "both":
         ax.grid(color=GRID, linewidth=0.8)
     else:
@@ -54,6 +85,26 @@ def _style_axes(ax, grid_axis="x"):
     ax.tick_params(colors=TEXT, length=0, labelsize=10)
     ax.xaxis.label.set_color(TEXT)
     ax.yaxis.label.set_color(TEXT)
+    # Style legend if present
+    legend = ax.get_legend()
+    if legend:
+        legend.get_frame().set_facecolor(LEGEND_FC)
+        legend.get_frame().set_edgecolor(LEGEND_EC)
+        for text in legend.get_texts():
+            text.set_color(LEGEND_TC)
+            text.set_fontweight("bold")
+
+
+def _style_legend(ax, **kwargs):
+    """Create and style a legend with theme-aware colors and bold text."""
+    legend = ax.legend(frameon=True, **kwargs)
+    if legend:
+        legend.get_frame().set_facecolor(LEGEND_FC)
+        legend.get_frame().set_edgecolor(LEGEND_EC)
+        legend.get_frame().set_alpha(0.9)
+        for text in legend.get_texts():
+            text.set_color(LEGEND_TC)
+            text.set_fontweight("bold")
 
 
 def _title_block(ax, title, subtitle=None):
@@ -193,7 +244,7 @@ def plot_policy_utilization(results):
     ax.set_xlabel("Scheduling policy")
     ax.set_ylabel("Average utilization")
     _style_axes(ax, "y")
-    ax.legend(frameon=False)
+    _style_legend(ax)
     fig.tight_layout()
     return fig
 
@@ -259,7 +310,7 @@ def plot_policy_summary_scorecard(results):
     ax.set_ylim(0, 1.05)
     ax.set_ylabel("Normalized score (higher is better)")
     _style_axes(ax, "y")
-    ax.legend(frameon=False)
+    _style_legend(ax)
     fig.tight_layout()
     return fig
 
@@ -288,7 +339,7 @@ def _mark_preferred_hline(ax, x_labels, y_values, pref_label):
     if idx is not None:
         ax.axhline(y=yvals[idx], color="red", linestyle="--", linewidth=1.8,
                    label=f"Preferred ({pref_label}): {yvals[idx]:.1f}")
-        ax.legend(frameon=False, fontsize=8)
+        _style_legend(ax, fontsize=8)
 
 
 def plot_close_time_sensitivity(summary):
@@ -345,7 +396,7 @@ def plot_hb_cost_components(summary):
     ax.set_xlabel("Number of holding bays")
     ax.set_ylabel("Cost")
     _style_axes(ax, "y")
-    ax.legend(frameon=False)
+    _style_legend(ax)
     fig.tight_layout()
     return fig
 
@@ -366,7 +417,7 @@ def plot_hb_service_constraint(summary):
     ax.set_xlabel("Number of holding bays")
     ax.set_ylabel("Days with >=1 overcapacity event")
     _style_axes(ax, "y")
-    ax.legend(frameon=False)
+    _style_legend(ax)
     fig.tight_layout()
     return fig
 
@@ -467,7 +518,7 @@ def plot_option_cost_components(options):
     ax.set_xlabel("Recommendation option")
     ax.set_ylabel("Cost")
     _style_axes(ax, "y")
-    ax.legend(frameon=False)
+    _style_legend(ax)
     fig.tight_layout()
     return fig
 
@@ -618,7 +669,7 @@ def plot_option_scorecard(options, title=None, subtitle=None, source_note=None):
     ax.set_xticklabels(comp["display_name"])
     ax.set_ylabel("Improvement vs existing plan (%)")
     _style_axes(ax, "y")
-    ax.legend(frameon=False, fontsize=9, ncol=min(len(metrics), 4), loc="upper left")
+    _style_legend(ax, fontsize=9, ncol=min(len(metrics), 4), loc="upper left")
 
     if source_note:
         _source_note(fig, source_note)
