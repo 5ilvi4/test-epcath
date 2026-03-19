@@ -958,16 +958,13 @@ def plot_hb_heatmap(hb_cost_df):
     ax.set_yticks(range(n_metrics))
     ax.tick_params(length=0)
 
-    # X-axis labels — bold + star for preferred bay count
-    for i, label in enumerate(hb_labels):
-        is_pref = label == preferred
-        ax.text(i, n_metrics - 0.45,
-                ("★ " + label + " ◀ preferred") if is_pref else label,
-                ha="center", va="bottom", fontsize=9,
-                fontweight="bold" if is_pref else "normal",
-                color="#FFD700" if is_pref else TEXT,
-                transform=ax.get_xaxis_transform())
-    ax.set_xticklabels([])
+    # X-axis labels — style preferred bay count in gold/bold
+    xlabels = [("★ " + l + " ◀") if l == preferred else l for l in hb_labels]
+    ax.set_xticklabels(xlabels, fontsize=9, rotation=30, ha="right")
+    for tick, label in zip(ax.get_xticklabels(), hb_labels):
+        if label == preferred:
+            tick.set_color("#FFD700")
+            tick.set_fontweight("bold")
 
     # Y-axis labels — bold and larger
     ax.set_yticklabels([m[0] for m in metrics_cfg], fontsize=10, fontweight="bold", color=TEXT)
