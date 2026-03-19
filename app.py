@@ -933,13 +933,14 @@ def plot_hb_heatmap(hb_cost_df):
         ("Empty Bay\nCost ($/day)",                                "empty_holding_bay_cost", False, "${:.2f}".format),
         ("Total\nCost ($/day)",                                    "total_holding_bay_cost", False, "${:.2f}".format),
         ("Overcapacity\nDays",                                     "days_with_instances",    False, "{:.0f}".format),
-        ("Wait Time\n(blocks/day)",                                "avg_instances_per_day",  False, "{:.2f}".format),
+        ("Overcapacity Pressure\n(excess patients/day)",             "avg_instances_per_day",  False, "{:.2f}".format),
     ]
     # Filter to columns that exist
     metrics_cfg = [m for m in metrics_cfg if m[1] in df.columns]
-    hb_labels = [str(int(v)) + " bays" for v in df["hb_count"]]
-    n_bays    = len(hb_labels)
-    n_metrics = len(metrics_cfg)
+    hb_labels   = [str(int(v)) + " bays" for v in df["hb_count"]]
+    preferred   = "18 bays"
+    n_bays      = len(hb_labels)
+    n_metrics   = len(metrics_cfg)
 
     score_matrix = np.zeros((n_metrics, n_bays))
     for row, (_, col, hib, _fmt) in enumerate(metrics_cfg):
@@ -954,10 +955,30 @@ def plot_hb_heatmap(hb_cost_df):
     ax.imshow(score_matrix, cmap="RdYlGn", vmin=0, vmax=1, aspect="auto")
 
     ax.set_xticks(range(n_bays))
-    ax.set_xticklabels(hb_labels, fontsize=9, rotation=30, ha="right")
     ax.set_yticks(range(n_metrics))
-    ax.set_yticklabels([m[0] for m in metrics_cfg], fontsize=9)
     ax.tick_params(length=0)
+
+    # X-axis labels — bold + star for preferred bay count
+    for i, label in enumerate(hb_labels):
+        is_pref = label == preferred
+        ax.text(i, n_metrics - 0.45,
+                ("★ " + label + " ◀ preferred") if is_pref else label,
+                ha="center", va="bottom", fontsize=9,
+                fontweight="bold" if is_pref else "normal",
+                color="#FFD700" if is_pref else TEXT,
+                transform=ax.get_xaxis_transform())
+    ax.set_xticklabels([])
+
+    # Y-axis labels — bold and larger
+    ax.set_yticklabels([m[0] for m in metrics_cfg], fontsize=10, fontweight="bold", color=TEXT)
+
+    # Highlight preferred column with a border
+    if preferred in hb_labels:
+        pref_idx = hb_labels.index(preferred)
+        for row in range(n_metrics):
+            rect = plt.Rectangle((pref_idx - 0.5, row - 0.5), 1, 1,
+                                  linewidth=2.5, edgecolor="#FFD700", facecolor="none")
+            ax.add_patch(rect)
 
     for row in range(n_metrics):
         for col in range(n_bays):
@@ -980,7 +1001,7 @@ def plot_hb_radar(hb_cost_df):
         ("Low\nEmpty Cost",   "empty_holding_bay_cost", False),
         ("Low\nTotal Cost",   "total_holding_bay_cost", False),
         ("Low\nOvercap Days", "days_with_instances",    False),
-        ("Low\nWait Time",    "avg_instances_per_day",  False),
+        ("Low Overcap\nPressure",    "avg_instances_per_day",  False),
     ]
     metrics_cfg = [m for m in metrics_cfg if m[1] in df.columns]
     spoke_labels = [m[0] for m in metrics_cfg]
