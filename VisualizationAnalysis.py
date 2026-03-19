@@ -276,16 +276,18 @@ def _preferred_close_time(summary):
         return None
 
 
-def _mark_preferred_vline(ax, x_labels, pref_label):
-    """Draw a vertical dashed red line at the preferred x label position."""
+def _mark_preferred_hline(ax, x_labels, y_values, pref_label):
+    """Draw a horizontal dashed red line at the y-value of the preferred option."""
+    if pref_label is None:
+        return
     labels = list(x_labels)
-    # Try exact match first, then partial match (e.g. "22:30" in "22:30:00")
+    yvals  = list(y_values)
     idx = next((i for i, v in enumerate(labels) if str(v) == str(pref_label)), None)
     if idx is None:
         idx = next((i for i, v in enumerate(labels) if str(pref_label) in str(v)), None)
     if idx is not None:
-        ax.axvline(x=idx, color="red", linestyle="--", linewidth=1.8,
-                   label=f"Preferred: {pref_label}")
+        ax.axhline(y=yvals[idx], color="red", linestyle="--", linewidth=1.8,
+                   label=f"Preferred ({pref_label}): {yvals[idx]:.1f}")
         ax.legend(frameon=False, fontsize=8)
 
 
@@ -298,7 +300,7 @@ def plot_close_time_sensitivity(summary):
     ax.set_ylabel("Total bay-hours after close")
     ax.tick_params(axis="x", rotation=30)
     _style_axes(ax, "y")
-    _mark_preferred_vline(ax, df["close_time"], _preferred_close_time(summary))
+    _mark_preferred_hline(ax, df["close_time"], df["total_bay_hours_after_close"], _preferred_close_time(summary))
     fig.tight_layout()
     return fig
 
@@ -313,7 +315,7 @@ def plot_close_time_days_with_demand(summary):
     ax.tick_params(axis="x", rotation=30)
     _style_axes(ax, "y")
     _annotate_bar_values(ax, decimals=0)
-    _mark_preferred_vline(ax, df["close_time"], _preferred_close_time(summary))
+    _mark_preferred_hline(ax, df["close_time"], df["days_with_any_demand_after_close"], _preferred_close_time(summary))
     fig.tight_layout()
     return fig
 
@@ -379,7 +381,7 @@ def plot_close_time_total_cost(summary):
     ax.set_ylabel("Total cost")
     ax.tick_params(axis="x", rotation=30)
     _style_axes(ax, "y")
-    _mark_preferred_vline(ax, df["close_time_hhmm"], pref)
+    _mark_preferred_hline(ax, df["close_time_hhmm"], df["total_cost"], pref)
     fig.tight_layout()
     return fig
 
@@ -387,6 +389,7 @@ def plot_close_time_total_cost(summary):
 def plot_close_time_cost_components(summary):
     df = summary["cost_analysis"]["close"]["cost_table"].copy().sort_values("close_hours")
     pref = _preferred_close_time(summary)
+    total = df["estimated_labor_cost"] + df["admission_cost"]
     fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
     ax.bar(df["close_time_hhmm"], df["estimated_labor_cost"], label="Labor cost", color=ACCENT)
     ax.bar(df["close_time_hhmm"], df["admission_cost"], bottom=df["estimated_labor_cost"], label="Admission cost", color=BENCHMARK)
@@ -395,7 +398,7 @@ def plot_close_time_cost_components(summary):
     ax.set_ylabel("Cost")
     ax.tick_params(axis="x", rotation=30)
     _style_axes(ax, "y")
-    _mark_preferred_vline(ax, df["close_time_hhmm"], pref)
+    _mark_preferred_hline(ax, df["close_time_hhmm"], total, pref)
     fig.tight_layout()
     return fig
 
