@@ -1308,6 +1308,12 @@ with tab_eda:
     ep_n   = (proc_df["lab_name"] == "EP").sum()
     days_n = proc_df["day"].nunique()
 
+    st.markdown("""
+    <style>
+    [data-testid="stMetricValue"] { font-size: 2rem; font-weight: 800; }
+    [data-testid="stMetricLabel"] { font-size: 0.95rem; font-weight: 600; }
+    </style>
+    """, unsafe_allow_html=True)
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Total procedures", f"{total:,}")
     m2.metric("Cath procedures",  f"{cath_n:,}")
