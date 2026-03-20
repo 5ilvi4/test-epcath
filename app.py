@@ -1956,6 +1956,42 @@ with tab_mincost:
         st.caption("avg_instances_per_day = avg 5-min overcapacity blocks per operating day (patient wait time proxy)")
         st.dataframe(_ct.style.format(_fmt), use_container_width=True)
 
+        # ── Delay Impact Table @ chosen 18 bays ───────────────────────────────
+        st.divider()
+        st.subheader("Delay Impact at Recommended 18 Holding Bays")
+        st.caption(
+            "Quantifies expected patient delay burden at the recommended bay count of 18, "
+            "based on simulation output and model assumptions."
+        )
+        _chosen_bays = 18
+        _hb_ct = ca["hb"]["cost_table"].copy()
+        _row = _hb_ct[_hb_ct["hb_count"] == _chosen_bays]
+        if not _row.empty:
+            _r = _row.iloc[0]
+            _avg_inst   = _r.get("avg_instances_per_day", 0.0)
+            _days_over  = int(_r.get("days_with_instances", 0))
+            _num_days   = 260
+            _block_min  = 5
+            _total_inst = round(_avg_inst * _num_days)
+            _total_delay_min = _total_inst * _block_min
+            _cancel_cost = float(_r.get("cancellation_cost", 0.0))
+
+            _delay_df = pd.DataFrame([
+                {"Metric": "Simulation period (operating days)",       "Value": f"{_num_days} days"},
+                {"Metric": "Days with any overcapacity",               "Value": f"{_days_over} / {_num_days} days ({_days_over/_num_days:.1%})"},
+                {"Metric": "Avg overcapacity instances per day",       "Value": f"{_avg_inst:.2f} patients/day"},
+                {"Metric": "Total patients affected per year (est.)",  "Value": f"~{_total_inst} patients"},
+                {"Metric": "Estimated delay per affected patient",     "Value": f"~{_block_min} min (model assumption)"},
+                {"Metric": "Total delay burden per year",              "Value": f"~{_total_delay_min} min (~{_total_delay_min/60:.1f} hrs)"},
+                {"Metric": "Estimated cost of delays (foregone revenue)", "Value": f"${_cancel_cost:.2f}/day  (${_cancel_cost*_num_days:.0f}/year)"},
+            ])
+            st.dataframe(_delay_df, use_container_width=True, hide_index=True)
+            st.caption(
+                "⚠️ Delay duration (5 min) is a model assumption based on overcapacity block size. "
+                "Actual delay depends on bay turnover rate at the time of overflow."
+            )
+        else:
+            st.info(f"No cost table row found for {_chosen_bays} bays.")
 
 
 # ── Tab: Policy Comparison ────────────────────────────────────────────────────
