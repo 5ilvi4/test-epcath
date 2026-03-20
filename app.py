@@ -1957,86 +1957,78 @@ with tab_mincost:
         st.dataframe(_ct.style.format(_fmt), use_container_width=True)
 
         # ── Delay Impact Table: 17 HB vs 18 HB ───────────────────────────────
-        # ── Unified Delay Impact Table: Both Recommendations ─────────────────
+        # ── Delay Impact Table: 17 HB vs 18 HB ───────────────────────────────
         st.divider()
-        st.subheader("Expected Delay Impact — Both Recommendations")
+        st.subheader("Expected Delay Impact — 17 vs 18 Holding Bays")
         st.caption(
             "Quantifies the total number of cases expected to be delayed per year, "
-            "estimated delay duration, and cost/operational impact for each recommendation."
+            "estimated delay duration, and cost/operational impact for each option."
         )
 
-        _hb_ct     = ca["hb"]["cost_table"].copy()
-        _close_ct  = ca["close"]["cost_table"].copy()
-        _close_eval = pd.DataFrame(summary["close_time_eval"])
-        _num_days  = 260
+        _hb_ct    = ca["hb"]["cost_table"].copy()
+        _num_days = 260
         _block_min = 5
-        _pref_close = close_rec["close_time_hhmm"]  # e.g. "22:30"
 
-        # ── HB values @ 18 bays ──────────────────────────────────────────────
-        _hb_row = _hb_ct[_hb_ct["hb_count"] == 18]
-        if not _hb_row.empty:
-            _hb = _hb_row.iloc[0]
-            _hb_avg_inst   = _hb.get("avg_instances_per_day", 0.0)
-            _hb_days_over  = int(_hb.get("days_with_instances", 0))
-            _hb_total_inst = round(_hb_avg_inst * _num_days)
-            _hb_delay_min  = _hb_total_inst * _block_min
-            _hb_cost_day   = float(_hb.get("cancellation_cost", 0.0))
+        def _extract_hb(bay_count):
+            _row = _hb_ct[_hb_ct["hb_count"] == bay_count]
+            if _row.empty:
+                return None
+            _r = _row.iloc[0]
+            avg_inst   = _r.get("avg_instances_per_day", 0.0)
+            days_over  = int(_r.get("days_with_instances", 0))
+            total_inst = round(avg_inst * _num_days)
+            delay_min  = total_inst * _block_min
+            cost_day   = float(_r.get("cancellation_cost", 0.0))
+            empty_day  = float(_r.get("empty_holding_bay_cost", 0.0))
+            total_day  = float(_r.get("total_holding_bay_cost", 0.0))
+            return dict(avg_inst=avg_inst, days_over=days_over, total_inst=total_inst,
+                        delay_min=delay_min, cost_day=cost_day, empty_day=empty_day, total_day=total_day)
+
+        _h17 = _extract_hb(17)
+        _h18 = _extract_hb(18)
+
+        if _h17 and _h18:
+            _rows = [
+                ("Simulation period (operating days)",
+                 f"{_num_days} days", f"{_num_days} days"),
+                ("Days with any overcapacity per year",
+                 f"{_h17['days_over']} / {_num_days} ({_h17['days_over']/_num_days:.1%})",
+                 f"{_h18['days_over']} / {_num_days} ({_h18['days_over']/_num_days:.1%})"),
+                ("Avg overcapacity instances per day",
+                 f"{_h17['avg_inst']:.2f} patients/day",
+                 f"{_h18['avg_inst']:.2f} patients/day"),
+                ("Total patients affected per year (est.)",
+                 f"~{_h17['total_inst']} patients",
+                 f"~{_h18['total_inst']} patients"),
+                ("Estimated delay per affected patient",
+                 f"~{_block_min} min", f"~{_block_min} min"),
+                ("Total delay burden per year",
+                 f"~{_h17['delay_min']} min (~{_h17['delay_min']/60:.1f} hrs)",
+                 f"~{_h18['delay_min']} min (~{_h18['delay_min']/60:.1f} hrs)"),
+                ("Foregone revenue — per day",
+                 f"${_h17['cost_day']:.2f}/day",
+                 f"${_h18['cost_day']:.2f}/day"),
+                ("Empty bay cost — per day",
+                 f"${_h17['empty_day']:.2f}/day",
+                 f"${_h18['empty_day']:.2f}/day"),
+                ("Total holding bay cost — per day",
+                 f"${_h17['total_day']:.2f}/day",
+                 f"${_h18['total_day']:.2f}/day"),
+                ("Total holding bay cost — per year",
+                 f"${_h17['total_day']*_num_days:.0f}/yr",
+                 f"${_h18['total_day']*_num_days:.0f}/yr"),
+                ("Operational impact",
+                 "Higher crowding risk — more patients wait for a bay on busy days",
+                 "Near-zero crowding — 18 bays covers 96.5% of days with no overcapacity"),
+            ]
+            _impact_df = pd.DataFrame(_rows, columns=["Metric", "17 HB", "18 HB ✅ Recommended"])
+            st.dataframe(_impact_df, use_container_width=True, hide_index=True)
+            st.caption(
+                "⚠️ Delay duration (5 min) is a model assumption based on overcapacity block size. "
+                "Actual delay depends on bay turnover rate at the time of overflow."
+            )
         else:
-            _hb_avg_inst = _hb_days_over = _hb_total_inst = _hb_delay_min = _hb_cost_day = 0
-
-        # ── Close time values @ preferred close time ─────────────────────────
-        _cl_eval_row = _close_eval[_close_eval["close_time"] == _pref_close]
-        _cl_cost_row = _close_ct[_close_ct["close_time_hhmm"] == _pref_close]
-        if not _cl_eval_row.empty and not _cl_cost_row.empty:
-            _cl_e = _cl_eval_row.iloc[0]
-            _cl_c = _cl_cost_row.iloc[0]
-            _cl_days_demand   = int(_cl_e.get("days_with_any_demand_after_close", 0))
-            _cl_total_bh      = float(_cl_e.get("total_bay_hours_after_close", 0.0))
-            _cl_avg_bh_day    = float(_cl_e.get("average_bay_hours_after_close_per_day", 0.0))
-            _cl_labor_cost    = float(_cl_c.get("estimated_labor_cost", 0.0))
-            _cl_admission_cost= float(_cl_c.get("admission_cost", 0.0))
-            _cl_total_cost    = float(_cl_c.get("total_cost", 0.0))
-        else:
-            _cl_days_demand = _cl_total_bh = _cl_avg_bh_day = 0
-            _cl_labor_cost = _cl_admission_cost = _cl_total_cost = 0.0
-
-        _rows = [
-            ("Simulation period",
-             f"{_num_days} operating days",
-             f"{_num_days} operating days"),
-            ("Days with delay / overcapacity per year",
-             f"{_hb_days_over} / {_num_days} days ({_hb_days_over/_num_days:.1%})",
-             f"{_cl_days_demand} / {_num_days} days ({_cl_days_demand/_num_days:.1%})"),
-            ("Total cases / instances delayed per year",
-             f"~{_hb_total_inst} patient-instances",
-             f"Demand present on {_cl_days_demand} days\n(total {_cl_total_bh:.1f} bay-hrs/yr)"),
-            ("Estimated delay duration per case",
-             f"~{_block_min} min (model assumption)",
-             f"~{_cl_avg_bh_day*60:.0f} min/day avg residual\n({_cl_avg_bh_day:.2f} bay-hrs/day)"),
-            ("Total delay burden per year",
-             f"~{_hb_delay_min} min (~{_hb_delay_min/60:.1f} hrs)",
-             f"~{_cl_total_bh:.1f} bay-hrs ({_cl_total_bh*60:.0f} min total)"),
-            ("Cost impact — per day",
-             f"${_hb_cost_day:.2f}/day (foregone revenue)",
-             f"${_cl_total_cost:.2f}/day (labor + admission)"),
-            ("Cost impact — per year",
-             f"${_hb_cost_day * _num_days:.0f}/yr",
-             f"${_cl_total_cost * _num_days:.0f}/yr"),
-            ("Operational impact",
-             "Brief crowding at peak — patient may wait for a bay",
-             "Patients still recovering past close → nurse overtime or hospital admission risk"),
-        ]
-
-        _impact_df = pd.DataFrame(
-            _rows,
-            columns=["Metric", "Rec 1 — 18 Holding Bays", f"Rec 2 — {_pref_close} Close Time"]
-        )
-        st.dataframe(_impact_df, use_container_width=True, hide_index=True)
-        st.caption(
-            "⚠️ HB delay duration (5 min) is a model assumption (overcapacity block size). "
-            "Close-time residual is total bay-hours with demand after close — not a per-patient delay. "
-            "Actual experience depends on bay turnover rate and recovery time remaining."
-        )
+            st.info("Cost table rows for 17 or 18 bays not found.")
 
 
 # ── Tab: Policy Comparison ────────────────────────────────────────────────────
