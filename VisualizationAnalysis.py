@@ -441,9 +441,21 @@ def plot_close_time_cost_components(summary):
     df = summary["cost_analysis"]["close"]["cost_table"].copy().sort_values("close_hours")
     pref = _preferred_close_time(summary)
     total = df["estimated_labor_cost"] + df["admission_cost"]
-    fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
+    fig, ax = plt.subplots(figsize=(10, 5), facecolor=BG)
     ax.bar(df["close_time_hhmm"], df["estimated_labor_cost"], label="Labor cost", color=ACCENT)
     ax.bar(df["close_time_hhmm"], df["admission_cost"], bottom=df["estimated_labor_cost"], label="Admission cost", color=BENCHMARK)
+
+    # Annotate each segment with its value
+    for i, (labor, admission) in enumerate(zip(df["estimated_labor_cost"], df["admission_cost"])):
+        # Labor cost label — centre of labor segment
+        if labor > 50:
+            ax.text(i, labor / 2, f"${labor:.0f}",
+                    ha="center", va="center", fontsize=7, fontweight="bold", color="white")
+        # Admission cost label — centre of admission segment
+        if admission > 50:
+            ax.text(i, labor + admission / 2, f"${admission:.0f}",
+                    ha="center", va="center", fontsize=7, fontweight="bold", color="white")
+
     _title_block(ax, "Close-time cost components")
     ax.set_xlabel("Holding-bay close time")
     ax.set_ylabel("Cost")
