@@ -951,23 +951,26 @@ def plot_hb_heatmap(hb_cost_df):
         for c, val in enumerate(df[col]):
             cell_text[row][c] = _fmt(val)
 
-    fig, ax = plt.subplots(figsize=(max(8, n_bays * 1.2), n_metrics * 0.9 + 1.5), facecolor=BG)
+    _bg   = VA.BG
+    _text = VA.TEXT
+
+    fig, ax = plt.subplots(figsize=(max(8, n_bays * 1.2), n_metrics * 0.9 + 1.5), facecolor=_bg)
+    ax.set_facecolor(_bg)
     ax.imshow(score_matrix, cmap="RdYlGn", vmin=0, vmax=1, aspect="auto")
 
     ax.set_xticks(range(n_bays))
     ax.set_yticks(range(n_metrics))
-    ax.tick_params(length=0)
+    ax.tick_params(length=0, colors=_text)
 
-    # X-axis labels — style preferred bay count in gold/bold
+    # X-axis labels — style preferred bay count in gold/bold, rest in theme text color
     xlabels = [("★ " + l + " ◀") if l == preferred else l for l in hb_labels]
-    ax.set_xticklabels(xlabels, fontsize=9, rotation=30, ha="right")
+    ax.set_xticklabels(xlabels, fontsize=9, rotation=30, ha="right", color=_text, fontweight="bold")
     for tick, label in zip(ax.get_xticklabels(), hb_labels):
         if label == preferred:
             tick.set_color("#FFD700")
-            tick.set_fontweight("bold")
 
-    # Y-axis labels — bold and larger
-    ax.set_yticklabels([m[0] for m in metrics_cfg], fontsize=10, fontweight="bold", color=TEXT)
+    # Y-axis labels — bold and themed
+    ax.set_yticklabels([m[0] for m in metrics_cfg], fontsize=10, fontweight="bold", color=_text)
 
     # Highlight preferred column with a border
     if preferred in hb_labels:
@@ -980,13 +983,19 @@ def plot_hb_heatmap(hb_cost_df):
     for row in range(n_metrics):
         for col in range(n_bays):
             brightness = score_matrix[row, col]
-            txt_color  = "white" if brightness > 0.75 or brightness < 0.25 else "#1a2233"
+            # In light mode middle cells are yellow — use dark text; extremes use white/dark accordingly
+            if brightness > 0.65:
+                txt_color = "white"
+            elif brightness < 0.35:
+                txt_color = "white"
+            else:
+                txt_color = "#1a2233"
             ax.text(col, row, cell_text[row][col],
                     ha="center", va="center", fontsize=10, color=txt_color,
                     fontweight="bold")
 
     ax.set_title("Holding bay options — green = best, yellow = middle, red = worst",
-                 fontsize=11, fontweight="bold", loc="left", color=TEXT)
+                 fontsize=11, fontweight="bold", loc="left", color=_text)
     fig.tight_layout()
     return fig
 
@@ -1018,8 +1027,12 @@ def plot_hb_radar(hb_cost_df):
     best_idx = df["total_holding_bay_cost"].idxmin()
     best_hb  = int(df.loc[best_idx, "hb_count"])
 
-    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw={"polar": True}, facecolor=BG)
-    ax.set_facecolor(BG)
+    _bg   = VA.BG
+    _text = VA.TEXT
+    _grid = VA.GRID
+
+    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw={"polar": True}, facecolor=_bg)
+    ax.set_facecolor(_bg)
 
     for i, hb in enumerate(hb_values):
         scores = [normed[col][i] for _, col, _ in metrics_cfg]
@@ -1031,18 +1044,21 @@ def plot_hb_radar(hb_cost_df):
         ax.fill(angles, scores, color=palette[i], alpha=0.08 if int(hb) == best_hb else 0.03)
 
     ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(spoke_labels, fontsize=10, color=TEXT)
+    ax.set_xticklabels(spoke_labels, fontsize=10, fontweight="bold", color=_text)
     ax.set_yticks([0.25, 0.5, 0.75, 1.0])
-    ax.set_yticklabels(["0.25", "0.5", "0.75", "1.0"], fontsize=7, color=C3)
+    ax.set_yticklabels(["0.25", "0.5", "0.75", "1.0"], fontsize=7, color=_text)
     ax.set_ylim(0, 1)
-    ax.tick_params(colors=C3)
-    ax.spines["polar"].set_color(C3)
-    ax.grid(color=C3, alpha=0.3)
+    ax.tick_params(colors=_text)
+    ax.spines["polar"].set_color(_grid)
+    ax.grid(color=_grid, alpha=0.3)
 
     ax.set_title(f"HB options — outer edge = best on each metric\n★ = cost-minimizing ({best_hb} bays)",
-                 fontsize=11, fontweight="bold", color=TEXT, pad=20)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.35, 1.15), fontsize=8,
-              framealpha=0.2, labelcolor=TEXT, facecolor=BG)
+                 fontsize=11, fontweight="bold", color=_text, pad=20)
+    legend = ax.legend(loc="upper right", bbox_to_anchor=(1.35, 1.15), fontsize=8,
+                       framealpha=0.9, facecolor=VA.LEGEND_FC, edgecolor=VA.LEGEND_EC)
+    for lt in legend.get_texts():
+        lt.set_color(_text)
+        lt.set_fontweight("bold")
     fig.tight_layout()
     return fig
 
