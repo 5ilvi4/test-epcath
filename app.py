@@ -982,16 +982,8 @@ def plot_hb_heatmap(hb_cost_df):
 
     for row in range(n_metrics):
         for col in range(n_bays):
-            brightness = score_matrix[row, col]
-            # In light mode middle cells are yellow — use dark text; extremes use white/dark accordingly
-            if brightness > 0.65:
-                txt_color = "white"
-            elif brightness < 0.35:
-                txt_color = "white"
-            else:
-                txt_color = "#1a2233"
             ax.text(col, row, cell_text[row][col],
-                    ha="center", va="center", fontsize=10, color=txt_color,
+                    ha="center", va="center", fontsize=10, color="black",
                     fontweight="bold")
 
     ax.set_title("Holding bay options — green = best, yellow = middle, red = worst",
